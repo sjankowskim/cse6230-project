@@ -26,8 +26,8 @@ int main() {
 
     do {
         curr_time = rdtscp();
-        // result = cosine(angle);
-        result = cos(angle);
+        result = cosine(angle);
+        // result = cos(angle);
         time_taken = rdtscp() - curr_time;
         // printf("cosine output: %f\n", result);
         // printf("cycles taken: %ld\n", time_taken);
