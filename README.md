@@ -4,6 +4,8 @@ CSE 6230 Spring 2024 project by Sebastian Jankowski, Gabriel mister-has-too-many
 ## Running General Purpose ##
 `git clone https://github.com/sjankowskim/cse6230-project.git`
 
+Change your directory to `cse6230-project`
+
 Edit `general_purpose.cpp` or make a copy of it and edit it as necessary.
 
 Run `make` or edit `Makefile` to change `SRCS = general_purpose.cpp` to whatever you named your file.
@@ -16,6 +18,14 @@ Use the scripts in `slurm/` to run your code on ICE-PACE.
 `git clone https://github.com/sjankowskim/cse6230-project.git`
 
 Change your directory to `cse6230-project`
+
+`module purge`
+
+`module load cmake`
+
+`module load cuda/11.7.0-7sdye3`
+
+`module load gcc`
 
 `mkdir build`
 
