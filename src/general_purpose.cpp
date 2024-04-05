@@ -1,8 +1,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <inttypes.h>
-#include "../headers/chatgpt.h"
-#include "../headers/utils.h"
+#include "../headers/chatgpt.hpp"
+#include "../headers/utils.hpp"
 
 #define PI (3.14)
 
