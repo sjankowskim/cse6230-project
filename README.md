@@ -37,8 +37,8 @@ Edit `cuda.cu` as necessary or make a copy of it and go into `CMakeLists.txt` an
 
 `make`
 
-Use the scripts in `slurm/` to run your code on ICE-PACE.
+You can add parameters to the slurm call (e.g. `-t 0`)
 
-`sbatch slurm/job-gpu`
+`sbatch job-gpu -t 0`
 
 
