@@ -8,10 +8,7 @@
 
 int main() {
     double angle = 0.0;
-    uint64_t curr_time;
     uint64_t time_taken;
-    double result;
-
     double sum = 0;
     int i = 0;
 
@@ -20,7 +17,7 @@ int main() {
     do {
         timer.start();
         // result = cosine(angle);
-        result = cos(angle);
+        cos(angle);
         timer.stop();
         time_taken = timer.getElapsedTime();
         // printf("cosine output: %f\n", result);
