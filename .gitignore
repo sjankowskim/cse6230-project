@@ -1,3 +1,8 @@
+# Ignore slurm result files & manually created output files
 *.out
+
+# Ignore Makefile-generated output files
 *.o
+
+# Ignore Makefile-generated compiled code files
 *.*

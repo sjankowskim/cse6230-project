@@ -1,5 +1,3 @@
-#include "../headers/chatgpt.h"
-
 /*-------------------------------*
  | CODE WRITTEN IN THIS SECITON  |
  | WAS DONE BY CHATGPT!          |
