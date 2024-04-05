@@ -1,6 +1,8 @@
 #include <cuda.h>
-#include "../headers/chatgpt.hpp"
-#include "../headers/utils.hpp"
+#include "utils.hpp"
+#include <thrust/scan.h>
+#include <thrust/execution_policy.h>
+#include <cub/cub.cuh>
 
 /*-------------------------------*
  | CODE WRITTEN IN THIS SECITON  |
@@ -54,6 +56,22 @@ __global__ void gpt_inclusiveScan(int* input, int* output, int n) {
  |         END SECTION           |
  *-------------------------------*/
 
+void print_int_array(int* arr, int size) {
+    int* temp = (int *) malloc(size * sizeof(int));
+    if (temp == 0) {
+        printf("malloc failed, ruh roh!\n");
+        return;
+    }
+    cudaMemcpy(temp, arr, size * sizeof(int), cudaMemcpyDeviceToHost);
+
+    printf("----------------------\n");
+    for (int i = 0; i < size; i++) {
+        printf("[%d]: %d\n", i, temp[i]);
+    }
+
+    free(temp);
+}
+
 int main(int argc, char *argv[]) {
     int type;
 
@@ -89,28 +107,41 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    const int n = 100000;
+    const int N = 100000;
     int *in;
     int *out;
+    Timer<std::nano> timer;
+    uint64_t time_taken;
 
-    cudaMalloc(&in, n * sizeof(int));
-    cudaMalloc(&out, n * sizeof(int));
+    cudaMalloc(&in, N * sizeof(int));
+    cudaMalloc(&out, N * sizeof(int));
 
+    int temp[N];
+    for (int i = 0; i < N; i++) {
+        temp[i] = i;
+    }
+
+    cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
+
+    int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+    timer.start();
     switch (type) {
         case 0:
+            gpt_inclusiveScan<<<numBlocks, BLOCK_SIZE>>>(in, out, N);
             break;
         case 1:
+            // thrust::inclusive_scan(thrust::device, in, in + n, out);
+            cub::DeviceScan::InclusiveSum(nullptr, 0, in, out, N);
             break;
         case 2:
             // TODO: ChatGPT-4
             break;
     }
-    Timer<std::nano> timer;
-    uint64_t time_taken;
-    timer.start();
-        
     timer.stop();
     time_taken = timer.getElapsedTime();
 
-    // printf("total time (nanoseconds): %f\n", );
+    print_int_array(out, 100);
+
+    printf("total time (nanoseconds): %ld\n", time_taken);
 }

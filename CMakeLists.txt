@@ -4,15 +4,6 @@ enable_language(CUDA)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
-# Packaging system
-if (NOT ${GROUP_NAME} STREQUAL None)
-    set(CPACK_GENERATOR TGZ)
-    set(CPACK_PACKAGE_FILE_NAME "cs267${GROUP_NAME}_hw2_3")
-    install(FILES gpu.cu DESTINATION .)
-    install(FILES ${CPACK_PACKAGE_FILE_NAME}.pdf DESTINATION .)
-    include(CPack)
-endif ()
-
 # We require the GNU compiler for this assignment.
 if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set(Prg-Intel "PrgEnv-intel")

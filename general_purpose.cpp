@@ -1,8 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <inttypes.h>
-#include "../headers/chatgpt.hpp"
-#include "../headers/utils.hpp"
+#include "utils.hpp"
 
 /*
 This file is meant to be copied and used as a framework
