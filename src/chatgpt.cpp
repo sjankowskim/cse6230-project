@@ -19,6 +19,47 @@ double gpt_cosine(double x) {
     return result;
 }
 
+__global__ void gpt_inclusiveScan(int* input, int* output, int n) {
+    __shared__ int temp[BLOCK_SIZE * 2];
+
+    int tid = threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + tid;
+
+    // Copy input to shared memory
+    if (idx < n) {
+        temp[tid] = input[idx];
+    } else {
+        temp[tid] = 0;
+    }
+
+    __syncthreads();
+
+    // Reduction phase
+    for (int stride = 1; stride <= BLOCK_SIZE; stride *= 2) {
+        int index = (tid + 1) * stride * 2 - 1;
+        if (index < BLOCK_SIZE * 2) {
+            temp[index] += temp[index - stride];
+        }
+        __syncthreads();
+    }
+
+    // Post-reduction phase
+    for (int stride = BLOCK_SIZE / 2; stride > 0; stride /= 2) {
+        __syncthreads();
+        int index = (tid + 1) * stride * 2 - 1;
+        if (index + stride < BLOCK_SIZE * 2) {
+            temp[index + stride] += temp[index];
+        }
+    }
+
+    __syncthreads();
+
+    // Write result to output
+    if (idx < n) {
+        output[idx] = temp[tid];
+    }
+}
+
 // 1) General algorithms (small)
 // 2) Vectorization
 // 3) CUDA 

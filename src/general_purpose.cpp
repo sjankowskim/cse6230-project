@@ -4,6 +4,11 @@
 #include "../headers/chatgpt.hpp"
 #include "../headers/utils.hpp"
 
+/*
+This file is meant to be copied and used as a framework
+for your other files. Hope it helps!
+*/
+
 #define PI (3.14)
 
 int main(int argc, char *argv[]) {
