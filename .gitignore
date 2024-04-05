@@ -5,7 +5,7 @@
 *.o
 
 # Ignore Makefile-generated compiled code files
-*.*
+!*.*
 
 # Ignore all files in build directory
 build/
