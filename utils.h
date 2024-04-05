@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <functional>
 #include <random>
 #include <ratio>
 #include <string>
@@ -10,6 +11,41 @@
 // =================
 // Helper Functions
 // =================
+
+template <typename Ratio = std::ratio<1>>
+class Timer
+{
+    public:
+        Timer() = default;
+
+        void start() 
+        {
+            currentTime = Clock::now();
+        }
+
+        void stop()
+        {
+            previousTime = currentTime;
+            currentTime = Clock::now();
+        }
+
+        double getElapsedTime()
+        {
+            std::chrono::duration<double, Ratio> elapsed = (currentTime - previousTime);
+            return elapsed.count();
+        }
+
+        std::chrono::duration<double, Ratio> getElapsedTimeChrono()
+        {
+            return (currentTime - previousTime);
+        }
+
+    private:
+        using Clock = std::chrono::high_resolution_clock;
+
+        std::chrono::high_resolution_clock::time_point currentTime;
+        std::chrono::high_resolution_clock::time_point previousTime;
+};
 
 // if (find_arg_idx(argc, argv, "-h") >= 0) {
 //     std::cout << "Options:" << std::endl;
@@ -66,37 +102,26 @@ void initRandomContainer(Container& container, int size, int seed)
     std::shuffle(container.begin(), container.end(), gen);
 }
 
-template <typename Ratio = std::ratio<1>>
-class Timer
+template <typename Container>
+bool containersAreEqual(Container& container1, Container& container2)
 {
-    public:
-        Timer() = default;
+    return std::equal(container1.begin(), container1.end(), container2.begin());
+}
 
-        void start() 
-        {
-            currentTime = Clock::now();
-        }
+template <typename Container, typename Predicate>
+double runTests(Container& container, int repitions, std::function<void()> predicate)
+{
+    Timer timer;
+    double averageTime = 0;
 
-        void stop()
-        {
-            previousTime = currentTime;
-            currentTime = Clock::now();
-        }
+    for (int i = 0; i < repitions; ++i)
+    {
+        timer.start();
+        predicate(container);
+        timer.stop();
 
-        double getElapsedTime()
-        {
-            std::chrono::duration<double, Ratio> elapsed = (currentTime - previousTime);
-            return elapsed.count();
-        }
-
-        std::chrono::duration<double, Ratio> getElapsedTimeChrono()
-        {
-            return (currentTime - previousTime);
-        }
-
-    private:
-        using Clock = std::chrono::high_resolution_clock;
-
-        std::chrono::high_resolution_clock::time_point currentTime;
-        std::chrono::high_resolution_clock::time_point previousTime;
-};
+        averageTime += timer.getElapsedTime();
+    }
+    
+    return averageTime / repitions;
+}
