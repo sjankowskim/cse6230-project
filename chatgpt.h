@@ -1,1 +1,0 @@
-double cosine(double x);
