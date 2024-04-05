@@ -6,7 +6,7 @@
  *-------------------------------*/
 
 // Function to calculate cosine using Taylor series expansion
-double cosine(double x) {
+double gpt_cosine(double x) {
     double result = 1.0;
     double term = 1.0;
     int sign = -1;

@@ -1,1 +1,1 @@
-double cosine(double x);
+double gpt_cosine(double x);

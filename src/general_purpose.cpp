@@ -16,7 +16,7 @@ int main() {
     // comment
     do {
         timer.start();
-        // result = cosine(angle);
+        // gpt_cosine(angle);
         cos(angle);
         timer.stop();
         time_taken = timer.getElapsedTime();
@@ -27,5 +27,5 @@ int main() {
         angle += 0.0000001;
     } while(angle <= PI);
     printf("total time: %f\n", sum);
-    printf("average cycles: %f\n", (double)sum / i);
+    printf("average time (nanoseconds): %f\n", (double)sum / i);
 }
