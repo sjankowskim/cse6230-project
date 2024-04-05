@@ -18,6 +18,7 @@ Use the scripts in `slurm/` to run your code on ICE-PACE.
 Change your directory to `cse6230-project`
 
 `mkdir build`
+
 `cd build`
 
 Edit `cuda.cu` as necessary or make a copy of it and go into `CMakeLists.txt` and change `cuda.cu` in `add_executable(gpu cuda.cu utils.hpp)` to be file name you made.
