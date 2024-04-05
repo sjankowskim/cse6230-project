@@ -1,11 +1,11 @@
+# Ignore Makefile-generated compiled code files
+test_code
+
 # Ignore slurm result files & manually created output files
 *.out
 
 # Ignore Makefile-generated output files
 *.o
-
-# Ignore Makefile-generated compiled code files
-!*.*
 
 # Ignore all files in build directory
 build/
