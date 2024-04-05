@@ -31,7 +31,7 @@ Change your directory to `cse6230-project`
 
 `cd build`
 
-Edit `cuda.cu` as necessary or make a copy of it and go into `CMakeLists.txt` and change `cuda.cu` in `add_executable(gpu cuda.cu utils.hpp)` to be file name you made.
+Make a new folder under the `cuda` directory and make a new cuda file. Then, go into `CMakeLists.txt` and change the cuda file in `add_executable(gpu cuda.cu utils.hpp)` to be file name you made.
 
 `cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=70 ..`
 
@@ -41,4 +41,5 @@ You can add parameters to the slurm call (e.g. `-t 0`)
 
 `sbatch job-gpu -t 0`
 
+Please put your slurm output files in the cuda directory
 
