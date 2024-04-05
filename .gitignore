@@ -8,6 +8,7 @@ test_code
 
 # Ignore Makefile-generated output files
 *.o
+*.exe
 
 # Ignore all files in build directory
 build/
