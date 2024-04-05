@@ -22,7 +22,7 @@ if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
             "module swap ${Prg-${CMAKE_C_COMPILER_ID}} PrgEnv-gnu")
 endif ()
 
-add_executable(gpu src/cuda.cpp src/chatgpt.cpp headers/chatgpt.hpp headers/utils.hpp)
+add_executable(gpu cuda.cu utils.hpp)
 target_compile_features(gpu PRIVATE cxx_std_14)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70")
 set_target_properties(gpu PROPERTIES CUDA_ARCHITECTURES "70")

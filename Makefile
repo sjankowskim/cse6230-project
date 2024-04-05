@@ -1,4 +1,4 @@
-SRCS = src/general_purpose.cpp src/chatgpt.cpp
+SRCS = general_purpose.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 CXX = g++

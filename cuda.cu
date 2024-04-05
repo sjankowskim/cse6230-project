@@ -1,0 +1,116 @@
+#include <cuda.h>
+#include "../headers/chatgpt.hpp"
+#include "../headers/utils.hpp"
+
+/*-------------------------------*
+ | CODE WRITTEN IN THIS SECITON  |
+ | WAS DONE BY CHATGPT!          |
+ *-------------------------------*/
+
+#define BLOCK_SIZE 256
+
+__global__ void gpt_inclusiveScan(int* input, int* output, int n) {
+    __shared__ int temp[BLOCK_SIZE * 2];
+
+    int tid = threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + tid;
+
+    // Copy input to shared memory
+    if (idx < n) {
+        temp[tid] = input[idx];
+    } else {
+        temp[tid] = 0;
+    }
+
+    __syncthreads();
+
+    // Reduction phase
+    for (int stride = 1; stride <= BLOCK_SIZE; stride *= 2) {
+        int index = (tid + 1) * stride * 2 - 1;
+        if (index < BLOCK_SIZE * 2) {
+            temp[index] += temp[index - stride];
+        }
+        __syncthreads();
+    }
+
+    // Post-reduction phase
+    for (int stride = BLOCK_SIZE / 2; stride > 0; stride /= 2) {
+        __syncthreads();
+        int index = (tid + 1) * stride * 2 - 1;
+        if (index + stride < BLOCK_SIZE * 2) {
+            temp[index + stride] += temp[index];
+        }
+    }
+
+    __syncthreads();
+
+    // Write result to output
+    if (idx < n) {
+        output[idx] = temp[tid];
+    }
+}
+
+/*-------------------------------*
+ |         END SECTION           |
+ *-------------------------------*/
+
+int main(int argc, char *argv[]) {
+    int type;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-t") == 0) {
+            int num = atoi(argv[i + 1]);
+            if (num > 2 || num < 0) {
+                printf("okay, smartass.\n");
+                return 1;
+            }
+            type = num;
+            i++;
+
+            switch (type) {
+                case 0:
+                    printf("Using GPT-3!\n");
+                    break;
+                case 1:
+                    printf("Using library call!\n");
+                    break;
+                case 2:
+                    printf("Using GPT-4!\n");
+                    break;
+            }
+        } else if (strcmp(argv[i], "-h") == 0) {
+            printf("./test_code <flags>\n"
+                    "\t-t [num]     : Determines what type of output to use (0: GPT-3, 1: library, 2: GPT-4)\n");
+            return 0;
+        } else {
+            printf("./test_code <flags>\n"
+                    "\t-t [num]     : Determines what type of output to use (0: GPT-3, 1: library, 2: GPT-4)\n");
+            return 0;
+        }
+    }
+
+    const int n = 100000;
+    int *in;
+    int *out;
+
+    cudaMalloc(&in, n * sizeof(int));
+    cudaMalloc(&out, n * sizeof(int));
+
+    switch (type) {
+        case 0:
+            break;
+        case 1:
+            break;
+        case 2:
+            // TODO: ChatGPT-4
+            break;
+    }
+    Timer<std::nano> timer;
+    uint64_t time_taken;
+    timer.start();
+        
+    timer.stop();
+    time_taken = timer.getElapsedTime();
+
+    // printf("total time (nanoseconds): %f\n", );
+}

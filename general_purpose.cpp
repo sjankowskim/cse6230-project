@@ -1,6 +1,40 @@
-#include <cuda_runtime.h>
+#include <math.h>
+#include <stdio.h>
+#include <inttypes.h>
 #include "../headers/chatgpt.hpp"
 #include "../headers/utils.hpp"
+
+/*
+This file is meant to be copied and used as a framework
+for your other files. Hope it helps!
+*/
+
+/*-------------------------------*
+ | CODE WRITTEN IN THIS SECITON  |
+ | WAS DONE BY CHATGPT!          |
+ *-------------------------------*/
+
+// Function to calculate cosine using Taylor series expansion
+double gpt_cosine(double x) {
+    double result = 1.0;
+    double term = 1.0;
+    int sign = -1;
+
+    // Iterate to add more terms to the series
+    for (int i = 2; i <= 20; i += 2) {  // Using 20 terms for approximation
+        term = term * x * x / (i * (i - 1));
+        result += sign * term;
+        sign *= -1;
+    }
+
+    return result;
+}
+
+/*-------------------------------*
+ |         END SECTION           |
+ *-------------------------------*/
+
+#define PI (3.14)
 
 int main(int argc, char *argv[]) {
     int type;
@@ -36,15 +70,6 @@ int main(int argc, char *argv[]) {
             return 0;
         }
     }
-
-    const int n = 100000;
-    int *in;
-    int *out;
-
-    cudaMalloc(&in, n * sizeof(int));
-    cudaMalloc(&out, n * sizeof(int));
-
-
 
     double angle = 0.0;
     uint64_t time_taken;
