@@ -8,7 +8,9 @@ Edit `general_purpose.cpp` or make a copy of it and edit it as necessary.
 
 Run `make` or edit `Makefile` to change `SRCS = general_purpose.cpp` to whatever you named your file.
 
-`./test_code <flags>`
+Use the scripts in `slurm/` to run your code on ICE-PACE.
+
+`sbatch slurm/job-gen`
 
 ## Running CUDA ##
 `git clone https://github.com/sjankowskim/cse6230-project.git`
@@ -23,5 +25,8 @@ Edit `cuda.cu` as necessary or make a copy of it and go into `CMakeLists.txt` an
 `cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=70 ..`
 `make`
 
+Use the scripts in `slurm/` to run your code on ICE-PACE.
+
+`sbatch slurm/job-gpu`
 
 
