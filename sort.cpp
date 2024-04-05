@@ -5,11 +5,11 @@
 #include <ratio>
 #include <vector>
 
-#include "utils.h"
+#include "utils.hpp"
 
 constexpr int DEFAULTSIZE = 10'000'000;
-constexpr int DEFAULTSEED = 1;
-constexpr int DEFAULTREPS = 1;
+constexpr int DEFAULTSEED = 100;
+constexpr int DEFAULTREPS = 100;
 
 // Function to swap two elements
 void swap(int& a, int& b) {
@@ -46,71 +46,30 @@ void quickSort(std::vector<int>& arr, int low, int high) {
     }
 }
 
-void serialSort(std::vector<int>& arr)
-{
-    std::sort(arr.begin(), arr.end());
-}
-
-void parallelSort(std::vector<int>& arr)
-{
-    std::sort(std::execution::seq, arr.begin(), arr.end());
-}
-
-double runGPTTests(std::vector<int>& container, int repitions)
-{
-    Timer timer;
-    double averageTime = 0;
-
-    for (int i = 0; i < repitions; ++i)
-    {
-        initRandomContainer(container, DEFAULTSIZE, DEFAULTSEED);
-
-        timer.start();
-        quickSort(container, 0, container.size() - 1);
-        timer.stop();
-
-        averageTime += timer.getElapsedTime();
-    }
-    
-    return averageTime / repitions;
-}
-
-double runLibraryTests(std::vector<int>& container, int repitions)
-{
-    Timer timer;
-    double averageTime = 0;
-
-    for (int i = 0; i < repitions; ++i)
-    {
-        initRandomContainer(container, DEFAULTSIZE, DEFAULTSEED);
-
-        timer.start();
-        serialSort(container);
-        timer.stop();
-
-        averageTime += timer.getElapsedTime();
-    }
-    
-    return averageTime / repitions;
-}
-
-
 int main(int argc, char** argv)
 {
     int size = find_int_arg(argc, argv, "-n", DEFAULTSIZE);
     int seed = find_int_arg(argc, argv, "-s", DEFAULTSEED);
+    int policy = find_int_arg(argc, argv, "-p", DEFAULTSEED);
 
     std::vector<int> systemArr;
     std::vector<int> gptArr;
 
-    initRandomContainer(systemArr, size, seed);
-    gptArr = systemArr;
+    auto policy = std::execution::seq;
 
-    double averageGPTTime = runGPTTests(gptArr, DEFAULTREPS);
-    double averageLibraryTime = runLibraryTests(gptArr, DEFAULTREPS);
+    auto gptLambda = [&] () {
+        quickSort(gptArr, 0, gptArr.size() - 1);
+    };
 
-    std::cout << "ChatGPT-4 implementation: " << averageGPTTime << " ms" << '\n';
-    std::cout << "STL implementation: " << averageLibraryTime << " ms" << '\n';
+    auto libraryLambda = [&] () {
+        std::sort(policy, systemArr.begin(), systemArr.end());
+    };
+
+    double averageGPTTime = runTests(gptArr, DEFAULTREPS, gptLambda, size);
+    double averageLibraryTime = runTests(systemArr, DEFAULTREPS, libraryLambda, size);
+
+    std::cout << "ChatGPT-4 implementation: " << averageGPTTime << " ns" << '\n';
+    std::cout << "STL implementation: " << averageLibraryTime << " ns" << '\n';
 
     return 0;
 }

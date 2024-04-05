@@ -9,10 +9,17 @@
 #include <vector>
 #include <algorithm>
 
-// =================
-// Helper Functions
-// =================
+// ==========================
+// Helper Classes and Enums
+// ==========================
 
+enum class Policies 
+{
+    SEQUENTIAL,
+    PARALLEL
+};
+
+// Default is in seconds
 template <typename Ratio = std::ratio<1>>
 class Timer
 {
@@ -47,6 +54,10 @@ class Timer
         std::chrono::high_resolution_clock::time_point currentTime;
         std::chrono::high_resolution_clock::time_point previousTime;
 };
+
+// =================
+// Helper Functions
+// =================
 
 // if (find_arg_idx(argc, argv, "-h") >= 0) {
 //     std::cout << "Options:" << std::endl;
@@ -93,11 +104,11 @@ void initRandomContainer(Container& container, int size, int seed)
     static std::random_device rd;
     static std::mt19937 gen(seed ? seed : rd());
 
-    container.reserve(size);
+    container.resize(size);
 
     for (int i = 0; i < size; ++i)
     {
-        container.push_back(i);
+        container[i] = i;
     }
 
     std::shuffle(container.begin(), container.end(), gen);
@@ -109,16 +120,17 @@ bool containersAreEqual(Container& container1, Container& container2)
     return std::equal(container1.begin(), container1.end(), container2.begin());
 }
 
-template <typename Container, typename Predicate>
-double runTests(Container& container, int repitions, std::function<void()> predicate)
+template <typename Container, typename Lambda>
+double runTests(Container& container, int repitions, Lambda& lambda, int size = 10'000, int seed = 1)
 {
-    Timer timer;
+    Timer<std::nano> timer;
     double averageTime = 0;
 
     for (int i = 0; i < repitions; ++i)
     {
+        initRandomContainer(container, size, seed);
         timer.start();
-        predicate(container);
+        lambda();
         timer.stop();
 
         averageTime += timer.getElapsedTime();
