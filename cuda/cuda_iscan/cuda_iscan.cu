@@ -1,8 +1,7 @@
 #include <cuda.h>
-#include "utils.hpp"
+#include "../../utils.hpp"
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
-#include <cub/cub.cuh>
 
 /*-------------------------------*
  | CODE WRITTEN IN THIS SECITON  |
@@ -108,10 +107,10 @@ int main(int argc, char *argv[]) {
     }
 
     double sum;
-    int const NUM_TRIALS = 100;
+    int const NUM_TRIALS = 1000;
 
     for (int i = 0; i < NUM_TRIALS; i++) {
-        const int N = 10000;
+        const int N = 1000000;
         int *in;
         int *out;
         Timer<std::nano> timer;
@@ -139,7 +138,6 @@ int main(int argc, char *argv[]) {
             case 1:
                 timer.start();
                 thrust::inclusive_scan(thrust::device, in, in + N, out);
-                // cub::DeviceScan::InclusiveSum(nullptr, 0, in, out, N);
                 timer.stop();
                 break;
             case 2:
