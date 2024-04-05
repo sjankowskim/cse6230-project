@@ -107,41 +107,56 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    const int N = 100000;
-    int *in;
-    int *out;
-    Timer<std::nano> timer;
-    uint64_t time_taken;
+    double sum;
+    int const NUM_TRIALS = 100;
 
-    cudaMalloc(&in, N * sizeof(int));
-    cudaMalloc(&out, N * sizeof(int));
+    for (int i = 0; i < NUM_TRIALS; i++) {
+        const int N = 10000;
+        int *in;
+        int *out;
+        Timer<std::nano> timer;
+        uint64_t time_taken;
 
-    int temp[N];
-    for (int i = 0; i < N; i++) {
-        temp[i] = i;
+        cudaMalloc(&in, N * sizeof(int));
+        cudaMalloc(&out, N * sizeof(int));
+
+        int temp[N];
+        for (int j = 0; j < N; j++) {
+            temp[j] = j;
+        }
+
+        cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
+
+        int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+
+        switch (type) {
+            case 0:
+                timer.start();
+                gpt_inclusiveScan<<<numBlocks, BLOCK_SIZE>>>(in, out, N);
+                timer.stop();
+                break;
+            case 1:
+                timer.start();
+                thrust::inclusive_scan(thrust::device, in, in + N, out);
+                // cub::DeviceScan::InclusiveSum(nullptr, 0, in, out, N);
+                timer.stop();
+                break;
+            case 2:
+                // TODO: ChatGPT-4
+                break;
+        }
+
+        time_taken = timer.getElapsedTime();
+
+        // print_int_array(out, 100);
+
+        cudaFree(in);
+        cudaFree(out);
+
+        sum += time_taken;
+        printf("time taken for trial %d (nanoseconds): %ld\n", i, time_taken);
     }
 
-    cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-
-    int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-    timer.start();
-    switch (type) {
-        case 0:
-            gpt_inclusiveScan<<<numBlocks, BLOCK_SIZE>>>(in, out, N);
-            break;
-        case 1:
-            // thrust::inclusive_scan(thrust::device, in, in + n, out);
-            cub::DeviceScan::InclusiveSum(nullptr, 0, in, out, N);
-            break;
-        case 2:
-            // TODO: ChatGPT-4
-            break;
-    }
-    timer.stop();
-    time_taken = timer.getElapsedTime();
-
-    print_int_array(out, 100);
-
-    printf("total time (nanoseconds): %ld\n", time_taken);
+    printf("total avg time (nanoseconds): %f\n", sum / NUM_TRIALS);
 }
