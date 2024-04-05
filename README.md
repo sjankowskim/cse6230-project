@@ -1,2 +1,2 @@
-## How to Run General Purpose ##
+# How to Run General Purpose #
 `git clone tesdas`
