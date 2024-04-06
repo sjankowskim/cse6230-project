@@ -7,4 +7,4 @@
 #SBATCH --mem-per-gpu=12G     
 
 #run the application:
-./gpu "$@"
+./gpu

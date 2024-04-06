@@ -2,15 +2,17 @@
 #include "../../utils.hpp"
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
+#include <cassert>
+#include <cstdlib>
 
 /*-------------------------------*
  | CODE WRITTEN IN THIS SECITON  |
  | WAS DONE BY CHATGPT!          |
  *-------------------------------*/
 
-#define BLOCK_SIZE 256
-#define ARRAY_SIZE 1000
-#define TOTAL_SIZE ARRAY_SIZE << 1
+#define BLOCK_SIZE (256)
+#define ARRAY_SIZE (1000)
+#define TOTAL_SIZE (2000)
 
 __global__ void gpt_mergeAndSort(int* array1, int* array2, int* mergedArray) {
     int tid = threadIdx.x;
@@ -58,109 +60,84 @@ __global__ void gpt_mergeAndSort(int* array1, int* array2, int* mergedArray) {
  |         END SECTION           |
  *-------------------------------*/
 
-void print_int_array(int* arr, int size) {
-    int* temp = (int *) malloc(size * sizeof(int));
-    if (temp == 0) {
-        printf("malloc failed, ruh roh!\n");
-        return;
-    }
-    cudaMemcpy(temp, arr, size * sizeof(int), cudaMemcpyDeviceToHost);
-
-    printf("----------------------\n");
-    for (int i = 0; i < size; i++) {
-        printf("[%d]: %d\n", i, temp[i]);
-    }
-
-    free(temp);
-}
-
-int main(int argc, char *argv[]) {
-    int type;
-
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-t") == 0) {
-            int num = atoi(argv[i + 1]);
-            if (num > 2 || num < 0) {
-                printf("okay, smartass.\n");
-                return 1;
-            }
-            type = num;
-            i++;
-
-            switch (type) {
-                case 0:
-                    printf("Using GPT-3!\n");
-                    break;
-                case 1:
-                    printf("Using library call!\n");
-                    break;
-                case 2:
-                    printf("Using GPT-4!\n");
-                    break;
-            }
-        } else if (strcmp(argv[i], "-h") == 0) {
-            printf("./test_code <flags>\n"
-                    "\t-t [num]     : Determines what type of output to use (0: GPT-3, 1: library, 2: GPT-4)\n");
-            return 0;
-        } else {
-            printf("./test_code <flags>\n"
-                    "\t-t [num]     : Determines what type of output to use (0: GPT-3, 1: library, 2: GPT-4)\n");
-            return 0;
-        }
-    }
-
+int main() {
     double sum;
+    int *in_1;
+    int *in_2;
+    int *result;
     int const NUM_TRIALS = 1000;
 
-    for (int i = 0; i < NUM_TRIALS; i++) {
-        int *in_1;
-        int *in_2;
-        int *result;
-        Timer<std::nano> timer;
-        uint64_t time_taken;
+    Timer<std::nano> timer;
+    uint64_t time_taken;
 
-        cudaMalloc(&in_1, ARRAY_SIZE * sizeof(int));
-        cudaMalloc(&in_2, ARRAY_SIZE * sizeof(int));
-        cudaMalloc(&result, TOTAL_SIZE * sizeof(int));
+    cudaMalloc(&in_1, ARRAY_SIZE * sizeof(int));
+    cudaMalloc(&in_2, ARRAY_SIZE * sizeof(int));
+    cudaMalloc(&result, TOTAL_SIZE * sizeof(int));
 
-        int temp_1[ARRAY_SIZE];
-        int temp_2[ARRAY_SIZE];
-        for (int j = 0; j < ARRAY_SIZE; j++) {
-            temp_1[j] = j;
-            temp_2[j] = ARRAY_SIZE - j;
+    for (int i = 0; i < 2; i++) {
+        sum = 0;
+        for (int j = 0; j < NUM_TRIALS; j++) {
+            srand(j);
+            int temp_1[ARRAY_SIZE];
+            int temp_2[ARRAY_SIZE];
+            for (int k = 0; k < ARRAY_SIZE; k++) {
+                temp_1[k] = rand();
+                temp_2[k] = rand();
+            }
+            cudaMemcpy(in_1, temp_1, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(in_2, temp_2, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
+
+            int numBlocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+            switch (i) {
+                case 0:
+                    timer.start();
+                    gpt_mergeAndSort<<<numBlocks, BLOCK_SIZE>>>(in_1, in_2, result);
+                    timer.stop();
+                    break;
+                case 1:
+                    timer.start();
+                    thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, result);
+                    timer.stop();
+                    break;
+                case 2:
+                    // TODO: ChatGPT-4
+                    break;
+            }
+
+            if (i == 0) {
+                int* lib_result;
+                cudaMalloc(&lib_result, TOTAL_SIZE * sizeof(int));
+                thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, lib_result);
+                int h_res1[TOTAL_SIZE];
+                int h_res2[TOTAL_SIZE];
+                cudaMemcpy(h_res1, result, TOTAL_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+                cudaMemcpy(h_res2, lib_result, TOTAL_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+                assert(arraysEqual(h_res1, hres_2, TOTAL_SIZE));
+                cudaFree(lib_result);
+            }
+
+            time_taken = timer.getElapsedTime();
+
+            sum += time_taken;
         }
-        cudaMemcpy(in_1, temp_1, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(in_2, temp_2, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
 
-        int numBlocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-        switch (type) {
+        switch (i) {
             case 0:
-                timer.start();
-                gpt_mergeAndSort<<<numBlocks, BLOCK_SIZE>>>(in_1, in_2, result);
-                timer.stop();
+                printf("Testing GPT-3.5!\n");
                 break;
             case 1:
-                timer.start();
-                thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, result);
-                timer.stop();
+                printf("Testing library call!\n");
                 break;
             case 2:
                 // TODO: ChatGPT-4
                 break;
         }
 
-        time_taken = timer.getElapsedTime();
-
-        // print_int_array(result, 100);
-
-        cudaFree(in_1);
-        cudaFree(in_2);
-        cudaFree(result);
-
-        sum += time_taken;
-        printf("time taken for trial %d (nanoseconds): %ld\n", i, time_taken);
+        printf("total avg time (nanoseconds): %f\n", sum / NUM_TRIALS);
     }
 
-    printf("total avg time (nanoseconds): %f\n", sum / NUM_TRIALS);
+    cudaFree(in_1);
+    cudaFree(in_2);
+    cudaFree(result);
 }

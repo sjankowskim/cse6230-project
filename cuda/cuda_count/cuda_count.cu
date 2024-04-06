@@ -65,91 +65,63 @@ void print_int_array(int* arr, int size) {
     free(temp);
 }
 
-int main(int argc, char *argv[]) {
-    int type;
+int main() {
+    double sum;
+    int const NUM_TRIALS = 1000;
+    const int N = 1000000;
+    int *in;
+    int result;
 
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-t") == 0) {
-            int num = atoi(argv[i + 1]);
-            if (num > 2 || num < 0) {
-                printf("okay, smartass.\n");
-                return 1;
+    Timer<std::nano> timer;
+    uint64_t time_taken;
+
+    cudaMalloc(&in, N * sizeof(int));
+
+    for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < NUM_TRIALS; i++) {
+            result = 0;
+
+            int temp[N];
+            for (int j = 0; j < N; j++) {
+                temp[j] = j % 2;
             }
-            type = num;
-            i++;
+
+            cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
+
+            int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
             switch (type) {
                 case 0:
-                    printf("Using GPT-3!\n");
+                    int *d_result;
+                    cudaMalloc(&d_result, sizeof(int));
+                    timer.start();
+                    gpt_countOnes<<<numBlocks, BLOCK_SIZE>>>(in, N, d_result);
+                    timer.stop();
+                    cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+                    cudaFree(d_result);
                     break;
                 case 1:
-                    printf("Using library call!\n");
+                    timer.start();
+                    result = thrust::count(thrust::device, in, in + N, 1);
+                    timer.stop();
                     break;
                 case 2:
-                    printf("Using GPT-4!\n");
+                    // TODO: ChatGPT-4
                     break;
             }
-        } else if (strcmp(argv[i], "-h") == 0) {
-            printf("./test_code <flags>\n"
-                    "\t-t [num]     : Determines what type of output to use (0: GPT-3, 1: library, 2: GPT-4)\n");
-            return 0;
-        } else {
-            printf("./test_code <flags>\n"
-                    "\t-t [num]     : Determines what type of output to use (0: GPT-3, 1: library, 2: GPT-4)\n");
-            return 0;
+
+            time_taken = timer.getElapsedTime();
+
+            // printf("count: %d\n", result);
+
+            cudaFree(in);
+
+            sum += time_taken;
+            printf("time taken for trial %d (nanoseconds): %ld\n", i, time_taken);
         }
+        
+        printf("total avg time (nanoseconds): %f\n", sum / NUM_TRIALS);
     }
 
-    double sum;
-    int const NUM_TRIALS = 1000;
-
-    for (int i = 0; i < NUM_TRIALS; i++) {
-        const int N = 1000000;
-        int *in;
-        Timer<std::nano> timer;
-        uint64_t time_taken;
-        int result = 0;
-
-        cudaMalloc(&in, N * sizeof(int));
-
-        int temp[N];
-        for (int j = 0; j < N; j++) {
-            temp[j] = j % 2;
-        }
-
-        cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-
-        int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-        switch (type) {
-            case 0:
-                int *d_result;
-                cudaMalloc(&d_result, sizeof(int));
-                timer.start();
-                gpt_countOnes<<<numBlocks, BLOCK_SIZE>>>(in, N, d_result);
-                timer.stop();
-                cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
-                cudaFree(d_result);
-                break;
-            case 1:
-                timer.start();
-                result = thrust::count(thrust::device, in, in + N, 1);
-                timer.stop();
-                break;
-            case 2:
-                // TODO: ChatGPT-4
-                break;
-        }
-
-        time_taken = timer.getElapsedTime();
-
-        // printf("count: %d\n", result);
-
-        cudaFree(in);
-
-        sum += time_taken;
-        printf("time taken for trial %d (nanoseconds): %ld\n", i, time_taken);
-    }
-
-    printf("total avg time (nanoseconds): %f\n", sum / NUM_TRIALS);
+    
 }

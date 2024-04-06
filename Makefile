@@ -2,7 +2,7 @@ SRCS = general_purpose.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 CXX = g++
-CXXFLAGS = -g -Wall -pedantic -std=c++11
+CXXFLAGS = -g -Wall -pedantic -O2 -std=c++17
 
 .PHONY: all test_code clean
 
