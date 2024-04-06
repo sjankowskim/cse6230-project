@@ -1,5 +1,5 @@
 # CSE 6230 Project #
-CSE 6230 Spring 2024 project by Sebastian Jankowski, Gabriel mister-has-too-many-last-names, and Ryan Ding
+CSE 6230 Spring 2024 project by Sebastian Jankowski, Gabriel Abraham Lopez Lugo, and Ryan Ding
 
 ## Running General Purpose ##
 `git clone https://github.com/sjankowskim/cse6230-project.git`
