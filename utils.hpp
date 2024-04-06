@@ -1,13 +1,15 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <functional>
+#include <iomanip>
+#include <iostream>
 #include <random>
 #include <ratio>
 #include <string>
 #include <vector>
-#include <algorithm>
 
 // ==========================
 // Helper Classes and Enums
@@ -99,7 +101,7 @@ char* find_string_option(int argc, char** argv, const char* option, char* defaul
 }
 
 template <typename Container>
-void initRandomContainer(Container& container, int size, int seed)
+void initRandomContainer(Container& container, size_t size, int seed)
 {
     static std::random_device rd;
     static std::mt19937 gen(seed ? seed : rd());
@@ -121,7 +123,7 @@ bool containersAreEqual(Container& container1, Container& container2)
 }
 
 template <typename Container, typename Lambda>
-double runTests(Container& container, int repitions, Lambda& lambda, int size = 10'000, int seed = 1)
+double runTests(Container& container, int repitions, Lambda& lambda, size_t size = 10'000, int seed = 1)
 {
     Timer<std::nano> timer;
     double averageTime = 0;
@@ -137,4 +139,10 @@ double runTests(Container& container, int repitions, Lambda& lambda, int size = 
     }
     
     return averageTime / repitions;
+}
+
+template <typename T>
+void printStats(std::string message, T value, std::string unit)
+{
+    std::cout << message << std::setw(20) << value << " " << unit << '\n';
 }
