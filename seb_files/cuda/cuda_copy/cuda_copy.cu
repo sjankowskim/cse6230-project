@@ -10,53 +10,30 @@
 
 #define BLOCK_SIZE 256
 
-__global__ void gpt_countEquals(int *array, int n, int target, int *result) {
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    int count = 0;
-    
-    for (int i = tid; i < n; i += blockDim.x * gridDim.x) {
-        if (array[i] == target) {
-            count++;
-        }
-    }
+__global__ void gpt_copyArray(const int* input_begin, const int* input_end, int* output) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    const int* ptr = input_begin + tid;
 
-    atomicAdd(result, count);
-}
-
-__global__ void copilot_countTarget(int *d_array, int n, int target, int *d_count) {
-    int index = threadIdx.x + blockIdx.x * blockDim.x;
-    if (index < n && d_array[index] == target) {
-        atomicAdd(d_count, 1);
+    while (ptr < input_end) {
+        output[tid] = *ptr;
+        ptr += blockDim.x * gridDim.x;  // Move to the next block's element
+        tid += blockDim.x * gridDim.x;  // Update thread ID for the next iteration
     }
 }
 
+__global__ void copilot_array_copy(int* d_in, int* d_out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        d_out[idx] = d_in[idx];
+    }
+}
 
-__global__ void gemini_count_targets(int* A, int n, int target, int* partial_counts) {
+__global__ void gemini_copy_array(const int* A, int* B, int n) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
-  int sum = 0;
 
-  // Loop through elements assigned to this thread
-  for (int j = i; j < n; j += blockDim.x) {
-    sum += (A[j] == target);
-  }
-
-  // Use shared memory for efficient thread-local reduction
-  __shared__ int shared_count[256];
-  shared_count[threadIdx.x] = sum;
-  __syncthreads();
-
-  // Reduce shared memory array using warp shuffle and reduction
-  int tid = threadIdx.x;
-  for (int stride = blockDim.x / 2; stride >= 1; stride /= 2) {
-    if (tid < stride) {
-      shared_count[tid] += shared_count[tid + stride];
-    }
-    __syncthreads();
-  }
-
-  // Final reduction using atomicAdd for thread-safe accumulation
-  if (tid == 0) {
-    atomicAdd(partial_counts, shared_count[0]);
+  // Check for threads exceeding array bounds
+  if (i < n) {
+    B[i] = A[i];
   }
 }
 
@@ -80,20 +57,28 @@ void print_int_array(int* arr, int size) {
     free(temp);
 }
 
+bool array_equals(int* arr1, int* arr2, int n) {
+    for (int i = 0; i < n; i++) {
+        if (arr1[i] != arr2[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int main() {
     Timer<std::nano> timer;
-    int const NUM_TRIALS = 10;
+    int const NUM_TRIALS = 1000;
     const int N = 100000;
     bool assertion = true;
 
     // TODO: Setup initial variables
     int* in;
-    int* d_result;
-    int result;
+    int* out;
 
     // TODO: cudaMalloc as needed
     cudaMalloc(&in, N * sizeof(int));
-    cudaMalloc(&d_result, sizeof(int));
+    cudaMalloc(&out, N * sizeof(int));
 
     for (int i = 0; i < 5; i++) {
         double sum = 0;
@@ -122,45 +107,45 @@ int main() {
             int temp[N];
             srand(j * i);
             for (int k = 0; k < N; k++) {
-                temp[k] = rand() % 10;
+                temp[k] = rand() % 1000;
             }
             cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-            cudaMemset(d_result, 0, sizeof(int));
 
             int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
             timer.start();
             switch (i) {
                 case LIBRARY:
-                    result = thrust::count(thrust::device, in, in + N, 1);
+                    thrust::copy(thrust::device, in, in + N, out);
                     break;
                 case GPT3:
-                    gpt_countEquals<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
+                    gpt_copyArray<<<num_blocks, BLOCK_SIZE>>>(in, in + N, out);
                     break;
                 case GPT4:
                     // TODO: GPT4
                     break;
                 case COPILOT:
-                    copilot_countTarget<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
+                    copilot_array_copy<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
                     break;
                 case GEMINI:
-                    gemini_count_targets<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
+                    gemini_copy_array<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
                     break;
             }
             timer.stop();
             if (j != 0) {
                 sum += timer.getElapsedTime();
-                // printf("time for trial %d: %f\n", j, timer.getElapsedTime());
             }
 
             // TODO: Verify results with library
             if (i != 0) {
-                int intended_result = thrust::count(thrust::device, in, in + N, 1);
-                cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
-                // printf("\tresult: %d\n", result);
-                // printf("\tintended_result: %d\n", intended_result);
-                assertion = (result == intended_result);
+                int* d_temp_out;
+                cudaMalloc(&d_temp_out, N * sizeof(int));
+                thrust::copy(thrust::device, in, in + N, d_temp_out);
+                int h_temp_out[N];
+                int h_llm_out[N];
+                cudaMemcpy(h_temp_out, d_temp_out, N * sizeof(int), cudaMemcpyDeviceToHost);
+                cudaMemcpy(h_llm_out, out, N * sizeof(int), cudaMemcpyDeviceToHost);
+                assertion = array_equals(h_temp_out, h_llm_out, N);
                 if (!assertion) {
-                    printf("\tintended_result: %d, actual result: %d\n", intended_result, result);
                     break;
                 }
             }
@@ -174,6 +159,6 @@ int main() {
     }
 
     // TODO: Free as needed
-    cudaFree(d_result);
+    cudaFree(out);
     cudaFree(in);
 }

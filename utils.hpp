@@ -21,6 +21,14 @@ enum class Policies
     PARALLEL
 };
 
+enum Algorithm {
+    LIBRARY,
+    GPT3,
+    GPT4,
+    COPILOT,
+    GEMINI
+};
+
 // Default is in seconds
 template <typename Ratio = std::ratio<1>>
 class Timer
