@@ -2,63 +2,119 @@
 #include "../../utils.hpp"
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
-#include <cassert>
-#include <cstdlib>
+#include <assert.h>
 
 /*-------------------------------*
  | CODE WRITTEN IN THIS SECITON  |
- | WAS DONE BY CHATGPT!          |
+ | WAS DONE BY AN LLM!           |
  *-------------------------------*/
 
 #define BLOCK_SIZE (256)
 #define ARRAY_SIZE (1000)
 #define TOTAL_SIZE (2000)
 
-__global__ void gpt_mergeAndSort(int* array1, int* array2, int* mergedArray) {
+__global__ void gpt_mergeSortedArrays(int* array1, int* array2, int* mergedArray) {
     int tid = threadIdx.x;
-    int bid = blockIdx.x;
+    int blockId = blockIdx.x;
     int blockSize = blockDim.x;
 
-    int startIdx1 = bid * blockSize;
+    int startIdx1 = blockId * blockSize;
     int startIdx2 = startIdx1 + ARRAY_SIZE;
-    int endIdx1 = startIdx2;
-    int endIdx2 = startIdx2 + blockSize;
 
-    int idx1 = startIdx1 + tid;
-    int idx2 = startIdx2 + tid;
+    int endIdx1 = min(startIdx1 + blockSize, ARRAY_SIZE);
+    int endIdx2 = min(startIdx2 + blockSize, TOTAL_SIZE);
 
-    __shared__ int tempArray[TOTAL_SIZE];
+    int idx1 = startIdx1;
+    int idx2 = startIdx2;
 
-    // Copy elements from array1 and array2 to shared memory
-    if (idx1 < endIdx1) {
-        tempArray[idx1] = array1[idx1];
-    }
-    if (idx2 < endIdx2) {
-        tempArray[idx2] = array2[idx2 - ARRAY_SIZE];
-    }
+    int mergedIdx = startIdx1 + tid * 2;
 
-    __syncthreads();
-
-    // Perform merge sort within shared memory
-    int i = startIdx1, j = startIdx2, k = startIdx1;
-    while (i < endIdx1 && j < endIdx2) {
-        if (tempArray[i] <= tempArray[j]) {
-            mergedArray[k++] = tempArray[i++];
+    while (idx1 < endIdx1 && idx2 < endIdx2) {
+        if (array1[idx1] <= array2[idx2 - ARRAY_SIZE]) {
+            mergedArray[mergedIdx] = array1[idx1];
+            idx1++;
         } else {
-            mergedArray[k++] = tempArray[j++];
+            mergedArray[mergedIdx] = array2[idx2 - ARRAY_SIZE];
+            idx2++;
         }
+        mergedIdx++;
     }
-    while (i < endIdx1) {
-        mergedArray[k++] = tempArray[i++];
+
+    while (idx1 < endIdx1) {
+        mergedArray[mergedIdx] = array1[idx1];
+        idx1++;
+        mergedIdx++;
     }
-    while (j < endIdx2) {
-        mergedArray[k++] = tempArray[j++];
+
+    while (idx2 < endIdx2) {
+        mergedArray[mergedIdx] = array2[idx2 - ARRAY_SIZE];
+        idx2++;
+        mergedIdx++;
     }
 }
+
+__device__ int binarySearch(int* array, int start, int end, int value) {
+    while (start <= end) {
+        int mid = start + (end - start) / 2;
+        if (array[mid] < value)
+            start = mid + 1;
+        else if (array[mid] > value)
+            end = mid - 1;
+        else
+            return mid;
+    }
+    return -1;
+}
+
+__global__ void copilot_mergeSortedArrays(int* d_a, int* d_b, int* d_c, int n) {
+    int index = threadIdx.x + blockIdx.x * blockDim.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for (int i = index; i < n; i += stride) {
+        int ai = i;
+        int bi = binarySearch(d_b, 0, n - 1, d_a[ai]);
+        if (bi != -1) {
+            d_c[2*ai] = d_a[ai];
+            d_c[2*ai + 1] = d_b[bi];
+        }
+    }
+}
+
+__global__ void gemini_merge(int* A, int* B, int* C, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x; // Thread ID within block
+  int stride = blockDim.x; // Thread stride for coalesced memory access
+
+  // Loop through all elements that this thread is responsible for
+  for (int k = i; k < 2*n; k += stride) {
+    int a_idx = k < n ? k : (k - n); // Index for A (bounded by n)
+    int b_idx = k >= n ? (k - n) : 0;   // Index for B (bounded by n)
+
+    // Choose element from A or B based on sorting order and boundary checks
+    C[k] = (a_idx < n && A[a_idx] <= B[b_idx]) ? A[a_idx] : B[b_idx]; 
+  }
+}
+
 
 /*-------------------------------*
  |         END SECTION           |
  *-------------------------------*/
+
+bool arraysEqual(int* arr1, int* arr2, int size) {
+    for (int i = 0; i < size; i++) {
+        if (arr1[i] != arr2[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int compare(const void *a, const void *b) {
+    int int_a = *((int*)a);
+    int int_b = *((int*)b);
+    if (int_a < int_b) return -1;
+    if (int_a > int_b) return 1;
+    return 0;
+}
 
 int main() {
     double sum;
@@ -74,53 +130,11 @@ int main() {
     cudaMalloc(&in_2, ARRAY_SIZE * sizeof(int));
     cudaMalloc(&result, TOTAL_SIZE * sizeof(int));
 
-    for (int i = 0; i < 2; i++) {
+    bool assertion;
+
+    for (int i = 0; i < 5; i++) {
         sum = 0;
-        for (int j = 0; j < NUM_TRIALS; j++) {
-            srand(j);
-            int temp_1[ARRAY_SIZE];
-            int temp_2[ARRAY_SIZE];
-            for (int k = 0; k < ARRAY_SIZE; k++) {
-                temp_1[k] = rand();
-                temp_2[k] = rand();
-            }
-            cudaMemcpy(in_1, temp_1, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
-            cudaMemcpy(in_2, temp_2, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
-
-            int numBlocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-            switch (i) {
-                case 0:
-                    timer.start();
-                    gpt_mergeAndSort<<<numBlocks, BLOCK_SIZE>>>(in_1, in_2, result);
-                    timer.stop();
-                    break;
-                case 1:
-                    timer.start();
-                    thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, result);
-                    timer.stop();
-                    break;
-                case 2:
-                    // TODO: ChatGPT-4
-                    break;
-            }
-
-            if (i == 0) {
-                int* lib_result;
-                cudaMalloc(&lib_result, TOTAL_SIZE * sizeof(int));
-                thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, lib_result);
-                int h_res1[TOTAL_SIZE];
-                int h_res2[TOTAL_SIZE];
-                cudaMemcpy(h_res1, result, TOTAL_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
-                cudaMemcpy(h_res2, lib_result, TOTAL_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
-                assert(arraysEqual(h_res1, hres_2, TOTAL_SIZE));
-                cudaFree(lib_result);
-            }
-
-            time_taken = timer.getElapsedTime();
-
-            sum += time_taken;
-        }
+        assertion = true;
 
         switch (i) {
             case 0:
@@ -130,11 +144,91 @@ int main() {
                 printf("Testing library call!\n");
                 break;
             case 2:
-                // TODO: ChatGPT-4
+                printf("Testing GPT-4!\n");
+                break;
+            case 3:
+                printf("Testing Copilot!\n");
+                break;
+            case 4:
+                printf("Testing Gemini!\n");
                 break;
         }
 
-        printf("total avg time (nanoseconds): %f\n", sum / NUM_TRIALS);
+        for (int j = 0; j < NUM_TRIALS; j++) {
+            srand(j);
+            int temp_1[ARRAY_SIZE];
+            int temp_2[ARRAY_SIZE];
+            for (int k = 0; k < ARRAY_SIZE; k++) {
+                temp_1[k] = rand() % 999 + 1;
+                temp_2[k] = rand() % 999 + 1;
+            }
+            qsort(temp_1, ARRAY_SIZE, sizeof(int), compare);
+            qsort(temp_2, ARRAY_SIZE, sizeof(int), compare);
+            cudaMemcpy(in_1, temp_1, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(in_2, temp_2, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemset(result, 0, TOTAL_SIZE * sizeof(int));
+
+            int num_blocks;
+            timer.start();
+            switch (i) {
+                case 0:
+                    num_blocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    gpt_mergeSortedArrays<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result);
+                    break;
+                case 1:
+                    thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, result);
+                    break;
+                case 2:
+                    // TODO: ChatGPT-4
+                    break;
+                case 3:
+                    num_blocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    copilot_mergeSortedArrays<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result, ARRAY_SIZE);
+                    break;
+                case 4:
+                    num_blocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    gemini_merge<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result, ARRAY_SIZE);
+                    break;
+            }
+            timer.stop();
+
+            if (i != 1) {
+                int* lib_result;
+                cudaMalloc(&lib_result, TOTAL_SIZE * sizeof(int));
+                thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, lib_result);
+                int* h_res1 = (int*) malloc(TOTAL_SIZE * sizeof(int));
+                int* h_res2 = (int*) malloc(TOTAL_SIZE * sizeof(int));
+
+                if (!h_res1 || !h_res2) {
+                    free(h_res1);
+                    free(h_res2);
+                    printf("malloc failed while asserting!\n");
+                    return 1;
+                }
+                
+                cudaMemcpy(h_res1, result, TOTAL_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+                cudaMemcpy(h_res2, lib_result, TOTAL_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+                cudaFree(lib_result);
+                assertion = arraysEqual(h_res1, h_res2, TOTAL_SIZE);
+                if (!assertion) {
+                    free(h_res1);
+                    free(h_res2);
+                    break;
+                }
+                free(h_res1);
+                free(h_res2);
+            }
+
+            time_taken = timer.getElapsedTime();
+            sum += time_taken;
+        }
+
+        if (!assertion) {
+            printf("\tIncorrect output! Continuing...\n");
+            continue;
+        }
+
+        printf("\ttotal avg time (nanoseconds): %f\n", sum / NUM_TRIALS);
     }
 
     cudaFree(in_1);

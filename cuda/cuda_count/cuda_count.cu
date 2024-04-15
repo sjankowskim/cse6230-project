@@ -77,7 +77,7 @@ int main() {
 
     cudaMalloc(&in, N * sizeof(int));
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 5; i++) {
         for (int i = 0; i < NUM_TRIALS; i++) {
             result = 0;
 

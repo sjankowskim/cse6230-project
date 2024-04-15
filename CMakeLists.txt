@@ -4,7 +4,10 @@ enable_language(CUDA)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
-add_executable(gpu cuda/cuda_iscan/cuda_iscan.cu utils.hpp)
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -Wextra -pedantic -g")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
+add_executable(gpu cuda/cuda_merge/cuda_merge.cu utils.hpp)
 target_compile_features(gpu PRIVATE cxx_std_14)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70")
 set_target_properties(gpu PROPERTIES CUDA_ARCHITECTURES "70")
