@@ -1,0 +1,26 @@
+---------------------------------------
+Begin Slurm Prolog: Apr-05-2024 21:30:09
+Job ID:    570087
+User ID:   sjankowski6
+Account:   coc
+Job name:  6230-gen
+Partition: coc-cpu
+---------------------------------------
+Testing GPT-3.5!
+total time (nanoseconds): 75525239.000000
+average time (nanoseconds): 24.052624
+Testing library call!
+total time (nanoseconds): 75442752.000000
+average time (nanoseconds): 24.026354
+---------------------------------------
+Begin Slurm Epilog: Apr-05-2024 21:30:09
+Job ID:        570087
+Array Job ID:  _4294967294
+User ID:       sjankowski6
+Account:       coc
+Job name:      allocation
+Resources:     cpu=64,mem=256G,node=1
+Rsrc Used:     cput=00:00:00,vmem=24K,walltime=00:00:00,mem=0,energy_used=0
+Partition:     coc-cpu
+Nodes:         atl1-1-01-005-3-1
+---------------------------------------

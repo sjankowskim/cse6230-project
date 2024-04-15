@@ -2,9 +2,7 @@
 test_code
 
 # Ignore slurm result files & manually created output files
-*.out
 *.json
-
 
 # Ignore Makefile-generated output files
 *.o
