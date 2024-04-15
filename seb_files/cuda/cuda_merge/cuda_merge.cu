@@ -1,5 +1,5 @@
 #include <cuda.h>
-#include "../../utils.hpp"
+#include "../../../utils.hpp"
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
 #include <assert.h>
@@ -117,44 +117,45 @@ int compare(const void *a, const void *b) {
 }
 
 int main() {
-    double sum;
+    Timer<std::nano> timer;
+    int const NUM_TRIALS = 1000;
+    const int N = 100000;
+    bool assertion = true;
+
+    // TODO: Setup initial variables
     int *in_1;
     int *in_2;
     int *result;
-    int const NUM_TRIALS = 1000;
 
-    Timer<std::nano> timer;
-    uint64_t time_taken;
-
+    // TODO: cudaMalloc as needed
     cudaMalloc(&in_1, ARRAY_SIZE * sizeof(int));
     cudaMalloc(&in_2, ARRAY_SIZE * sizeof(int));
     cudaMalloc(&result, TOTAL_SIZE * sizeof(int));
 
-    bool assertion;
-
     for (int i = 0; i < 5; i++) {
-        sum = 0;
-        assertion = true;
+        double sum = 0;
 
         switch (i) {
-            case 0:
-                printf("Testing GPT-3.5!\n");
-                break;
-            case 1:
+            case LIBRARY:
                 printf("Testing library call!\n");
                 break;
-            case 2:
+            case GPT3:
+                printf("Testing GPT-3.5!\n");
+                break;
+            case GPT4:
                 printf("Testing GPT-4!\n");
                 break;
-            case 3:
+            case COPILOT:
                 printf("Testing Copilot!\n");
                 break;
-            case 4:
+            case GEMINI:
                 printf("Testing Gemini!\n");
                 break;
         }
 
         for (int j = 0; j < NUM_TRIALS; j++) {
+
+            // TODO: Setup initial variables and cudaMemcpy as needed.
             srand(j);
             int temp_1[ARRAY_SIZE];
             int temp_2[ARRAY_SIZE];
@@ -168,31 +169,32 @@ int main() {
             cudaMemcpy(in_2, temp_2, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
             cudaMemset(result, 0, TOTAL_SIZE * sizeof(int));
 
-            int num_blocks;
+            int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
             timer.start();
             switch (i) {
-                case 0:
-                    num_blocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                    gpt_mergeSortedArrays<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result);
-                    break;
-                case 1:
+                case LIBRARY:
                     thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, result);
                     break;
-                case 2:
-                    // TODO: ChatGPT-4
+                case GPT3:
+                    gpt_mergeSortedArrays<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result);
                     break;
-                case 3:
-                    num_blocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                case GPT4:
+                    // TODO: GPT4
+                    break;
+                case COPILOT:
                     copilot_mergeSortedArrays<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result, ARRAY_SIZE);
                     break;
-                case 4:
-                    num_blocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                case GEMINI:
                     gemini_merge<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result, ARRAY_SIZE);
                     break;
             }
             timer.stop();
+            if (j != 0) {
+                sum += timer.getElapsedTime();
+            }
 
-            if (i != 1) {
+            // TODO: Verify results with library
+            if (i != 0) {
                 int* lib_result;
                 cudaMalloc(&lib_result, TOTAL_SIZE * sizeof(int));
                 thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, lib_result);
@@ -218,19 +220,16 @@ int main() {
                 free(h_res1);
                 free(h_res2);
             }
-
-            time_taken = timer.getElapsedTime();
-            sum += time_taken;
         }
 
         if (!assertion) {
             printf("\tIncorrect output! Continuing...\n");
             continue;
         }
-
-        printf("\ttotal avg time (nanoseconds): %f\n", sum / NUM_TRIALS);
+        printf("\ttotal avg time (nanoseconds): %f\n", sum / (NUM_TRIALS - 1));
     }
 
+    // TODO: Free as needed
     cudaFree(in_1);
     cudaFree(in_2);
     cudaFree(result);

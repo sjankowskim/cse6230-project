@@ -82,7 +82,7 @@ void print_int_array(int* arr, int size) {
 
 int main() {
     Timer<std::nano> timer;
-    int const NUM_TRIALS = 10;
+    int const NUM_TRIALS = 1000;
     const int N = 100000;
     bool assertion = true;
 
