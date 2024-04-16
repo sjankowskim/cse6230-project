@@ -106,20 +106,18 @@ void initRandomContainer(Container& container, size_t size, int seed)
     static std::random_device rd;
     static std::mt19937 gen(seed ? seed : rd());
 
-    container.resize(size);
-
     for (int i = 0; i < size; ++i)
     {
         container[i] = i;
     }
 
-    std::shuffle(container.begin(), container.end(), gen);
+    std::shuffle(std::begin(container), std::end(container), gen);
 }
 
 template <typename Container>
 bool containersAreEqual(Container& container1, Container& container2)
 {
-    return std::equal(container1.begin(), container1.end(), container2.begin());
+    return std::equal(std::begin(container1), std::end(container1), std::begin(container2));
 }
 
 template <typename Container, typename Lambda>

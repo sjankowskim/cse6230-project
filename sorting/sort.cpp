@@ -97,8 +97,8 @@ int main(int argc, char** argv)
     int seed = find_int_arg(argc, argv, "-s", DEFAULTSEED);
     auto policy = std::execution::par;
 
-    std::vector<int> systemArr;
-    std::vector<int> gptArr;
+    std::vector<int> systemArr(size);
+    std::vector<int> gptArr(size);
 
 #ifdef DEBUG
     std::set<std::thread::id> thread_ids;
