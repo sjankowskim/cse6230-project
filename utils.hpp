@@ -65,6 +65,40 @@ class Timer
         std::chrono::high_resolution_clock::time_point previousTime;
 };
 
+template <typename Ratio = std::ratio<1>>
+class Timer2
+{
+    public:
+        Timer2() = default;
+
+        void start() 
+        {
+            start_time = Clock::now();
+        }
+
+        void stop()
+        {
+            end_time = Clock::now();
+        }
+
+        double getElapsedTime()
+        {
+            std::chrono::duration<double, Ratio> elapsed = (end_time - start_time);
+            return elapsed.count();
+        }
+
+        std::chrono::duration<double, Ratio> getElapsedTimeChrono()
+        {
+            return (end_time - start_time);
+        }
+
+    private:
+        using Clock = std::chrono::high_resolution_clock;
+
+        std::chrono::high_resolution_clock::time_point start_time;
+        std::chrono::high_resolution_clock::time_point end_time;
+};
+
 // =================
 // Helper Functions
 // =================
@@ -152,3 +186,4 @@ void printStats(std::string message, T value, std::string unit)
 {
     std::cout << message << std::setw(20) << value << " " << unit << '\n';
 }
+

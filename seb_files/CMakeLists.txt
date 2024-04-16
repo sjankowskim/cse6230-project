@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -Wextra -pedantic -g")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
-add_executable(gpu cuda/cuda_count/cuda_count.cu ../utils.hpp)
+add_executable(gpu cuda/cuda_find/cuda_find.cu ../utils.hpp)
 target_compile_features(gpu PRIVATE cxx_std_14)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70")
 set_target_properties(gpu PROPERTIES CUDA_ARCHITECTURES "70")

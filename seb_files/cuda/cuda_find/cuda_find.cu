@@ -1,6 +1,7 @@
 #include <cuda.h>
 #include "../../../utils.hpp"
-#include <thrust/scan.h>
+#include <thrust/find.h>
+#include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 
 #define BLOCK_SIZE       (256)
@@ -12,45 +13,44 @@
  | WAS DONE BY AN LLM!           |
  *-------------------------------*/
 
-__global__ void gpt_copyArray(const int* input_begin, const int* input_end, int* output) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    const int* ptr = input_begin + tid;
+__global__ void gpt_findTargetValue(const int* array, int size, int target, int** result) {
+    __shared__ int* minPtr; // Shared memory variable to store the minimum pointer to the target value
 
-    while (ptr < input_end) {
-        output[tid] = *ptr;
-        ptr += blockDim.x * gridDim.x;  // Move to the next block's element
-        tid += blockDim.x * gridDim.x;  // Update thread ID for the next iteration
+    // Initialize minPtr to nullptr
+    if (threadIdx.x == 0) {
+        minPtr = nullptr;
+    }
+    __syncthreads();
+
+    // Search for the target value in parallel
+    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < size; i += blockDim.x * gridDim.x) {
+        if (array[i] == target) {
+            int* myPtr = const_cast<int*>(&array[i]); // Pointer to the target value found by this thread
+
+            // Update minPtr using atomic operation
+            atomicMin(reinterpret_cast<unsigned long long*>(&minPtr), reinterpret_cast<unsigned long long>(myPtr));
+        }
+    }
+    __syncthreads();
+
+    // Output the pointer to the first instance of the target value
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        *result = minPtr;
     }
 }
 
-__global__ void copilot_array_copy(int* d_in, int* d_out, int size) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size) {
-        d_out[idx] = d_in[idx];
+__global__ void my_findTarget(const int* array, int size, int target, int** result) {
+    for (int i = 0; i < size; i++) {
+        if (array[i] == target) {
+            *result = (int*)&array[i];
+            return;
+        }
     }
-}
-
-__global__ void gemini_copy_array(const int* A, int* B, int n) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-  // Check for threads exceeding array bounds
-  if (i < n) {
-    B[i] = A[i];
-  }
 }
 
 /*-------------------------------*
  |         END SECTION           |
  *-------------------------------*/
-
-bool array_equals(int* arr1, int* arr2, int n) {
-    for (int i = 0; i < n; i++) {
-        if (arr1[i] != arr2[i]) {
-            return false;
-        }
-    }
-    return true;
-}
 
 int main() {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -61,13 +61,26 @@ int main() {
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
+    // TODO: Setup thrust variables
+    thrust::device_vector<int> thrust_in(N);
+    thrust::device_vector<int>::iterator thrust_result;
+
     // TODO: Setup initial variables
     int* in;
-    int* out;
+    int** d_result;
+    int* h_result;
 
     // TODO: cudaMalloc as needed
     cudaMalloc(&in, N * sizeof(int));
-    cudaMalloc(&out, N * sizeof(int));
+    cudaMalloc(&d_result, sizeof(int*));
+
+    // TODO: Setup initial variables and cudaMemcpy as needed.
+    int temp[N];
+    for (int k = 0; k < N; k++) {
+        temp[k] = k;
+        thrust_in[k] = k;
+    }
+    cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
 
     for (int i = 0; i < 5; i++) {
         double sum = 0;
@@ -91,41 +104,28 @@ int main() {
         }
 
         for (int j = 0; j < NUM_TRIALS; j++) {
-
-            // TODO: Setup initial variables and cudaMemcpy as needed.
-            int temp[N];
-            srand(j * i);
-            for (int k = 0; k < N; k++) {
-                temp[k] = rand() % 1000;
-            }
-            cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-            
             switch (i) {
                 case LIBRARY:
                     timer.start();
-                    thrust::copy(thrust::device, in, in + N, out);
+                    thrust_result = thrust::find(thrust_in.begin(), thrust_in.end(), 69);
                     timer.stop();
                     break;
                 case GPT3:
                     cudaEventRecord(start, 0);
-                    gpt_copyArray<<<num_blocks, BLOCK_SIZE>>>(in, in + N, out);
+                    gpt_findTargetValue<<<num_blocks, BLOCK_SIZE>>>(in, N, 69, d_result);
                     cudaEventRecord(stop, 0);
                     cudaEventSynchronize(stop);
                     break;
                 case GPT4:
                     // TODO: GPT4
+                    cudaEventRecord(start, 0);
+                    my_findTarget<<<1, 1>>>(in, N, 69, d_result);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
                 case COPILOT:
-                    cudaEventRecord(start, 0);
-                    copilot_array_copy<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
                     break;
                 case GEMINI:
-                    cudaEventRecord(start, 0);
-                    gemini_copy_array<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
                     break;
             }
             
@@ -141,15 +141,12 @@ int main() {
 
             // TODO: Verify results with library
             if (i != 0) {
-                int* d_temp_out;
-                cudaMalloc(&d_temp_out, N * sizeof(int));
-                thrust::copy(thrust::device, in, in + N, d_temp_out);
-                int h_temp_out[N];
-                int h_llm_out[N];
-                cudaMemcpy(h_temp_out, d_temp_out, N * sizeof(int), cudaMemcpyDeviceToHost);
-                cudaMemcpy(h_llm_out, out, N * sizeof(int), cudaMemcpyDeviceToHost);
-                assertion = array_equals(h_temp_out, h_llm_out, N);
+                int* h_temp_result;
+                h_result = thrust::find(thrust::device, in, in + N, 69);
+                cudaMemcpy(&h_temp_result, d_result, sizeof(int*), cudaMemcpyDeviceToHost);
+                assertion = (h_result == h_temp_result);
                 if (!assertion) {
+                    printf("\tintended_result: %p, actual result: %p\n", h_result, h_temp_result);
                     break;
                 }
             }
@@ -166,6 +163,6 @@ int main() {
     cudaEventDestroy(stop);
 
     // TODO: Free as needed
-    cudaFree(out);
+    cudaFree(d_result);
     cudaFree(in);
 }

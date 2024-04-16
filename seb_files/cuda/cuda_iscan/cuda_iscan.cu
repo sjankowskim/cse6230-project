@@ -3,12 +3,14 @@
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
 
+#define BLOCK_SIZE       (256)
+#define NUM_TRIALS      (1000)
+#define N             (100000)
+
 /*-------------------------------*
  | CODE WRITTEN IN THIS SECITON  |
  | WAS DONE BY CHATGPT!          |
  *-------------------------------*/
-
-#define BLOCK_SIZE 256
 
 __global__ void gpt_inclusiveScan(int* input, int* output, int n) {
     int tid = threadIdx.x;
@@ -123,22 +125,6 @@ __global__ void copilot_scan_kernel(int *g_odata, int *g_idata, int n) {
  |         END SECTION           |
  *-------------------------------*/
 
-void print_int_array(int* arr, int size) {
-    int* temp = (int *) malloc(size * sizeof(int));
-    if (temp == 0) {
-        printf("malloc failed, ruh roh!\n");
-        return;
-    }
-    cudaMemcpy(temp, arr, size * sizeof(int), cudaMemcpyDeviceToHost);
-
-    printf("----------------------\n");
-    for (int i = 0; i < size; i++) {
-        printf("[%d]: %d\n", i, temp[i]);
-    }
-
-    free(temp);
-}
-
 bool array_equals(int* arr1, int* arr2, int n) {
     for (int i = 0; i < n; i++) {
         if (arr1[i] != arr2[i]) {
@@ -149,10 +135,13 @@ bool array_equals(int* arr1, int* arr2, int n) {
 }
 
 int main() {
-    Timer<std::nano> timer;
-    int const NUM_TRIALS = 1000;
-    const int N = 100000;
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    Timer2<std::milli> timer;
     bool assertion = true;
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
     // TODO: Setup initial variables
     int *in;
@@ -192,29 +181,44 @@ int main() {
                 temp[k] = rand() % 1000;
             }
             cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-
-            int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-            timer.start();
+            
             switch (i) {
                 case LIBRARY:
+                    timer.start();
                     thrust::inclusive_scan(thrust::device, in, in + N, out);
+                    timer.stop();
                     break;
                 case GPT3:
+                    cudaEventRecord(start, 0);
                     gpt_inclusiveScan<<<1, BLOCK_SIZE>>>(in, out, N);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
                 case GPT4:
                     // TODO: GPT4
                     break;
                 case COPILOT:
+                    cudaEventRecord(start, 0);
                     copilot_scan_kernel<<<1, N/2, N * sizeof(int)>>>(in, out, N);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
                 case GEMINI:
+                    cudaEventRecord(start, 0);
                     gemini_inclusive_scan<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
             }
-            timer.stop();
+            
             if (j != 0) {
-                sum += timer.getElapsedTime();
+                if (i == 0){
+                    sum += timer.getElapsedTime();
+                } else {
+                    float elapsedTime;
+                    cudaEventElapsedTime(&elapsedTime, start, stop);
+                    sum += elapsedTime;
+                }
             }
 
             // TODO: Verify results with library
@@ -254,8 +258,11 @@ int main() {
             printf("\tIncorrect output! Continuing...\n");
             continue;
         }
-        printf("\ttotal avg time (nanoseconds): %f\n", sum / (NUM_TRIALS - 1));
+        printf("\ttotal avg time (milliseconds): %f\n", sum / (NUM_TRIALS - 1));
     }
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
 
     // TODO: Free as needed
     cudaFree(out);

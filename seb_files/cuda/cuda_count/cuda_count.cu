@@ -3,12 +3,14 @@
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
 
+#define BLOCK_SIZE       (256)
+#define NUM_TRIALS      (1000)
+#define N             (100000)
+
 /*-------------------------------*
  | CODE WRITTEN IN THIS SECITON  |
  | WAS DONE BY AN LLM!           |
  *-------------------------------*/
-
-#define BLOCK_SIZE 256
 
 __global__ void gpt_countEquals(int *array, int n, int target, int *result) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -64,27 +66,14 @@ __global__ void gemini_count_targets(int* A, int n, int target, int* partial_cou
  |         END SECTION           |
  *-------------------------------*/
 
-void print_int_array(int* arr, int size) {
-    int* temp = (int *) malloc(size * sizeof(int));
-    if (temp == 0) {
-        printf("malloc failed, ruh roh!\n");
-        return;
-    }
-    cudaMemcpy(temp, arr, size * sizeof(int), cudaMemcpyDeviceToHost);
-
-    printf("----------------------\n");
-    for (int i = 0; i < size; i++) {
-        printf("[%d]: %d\n", i, temp[i]);
-    }
-
-    free(temp);
-}
-
 int main() {
-    Timer<std::nano> timer;
-    int const NUM_TRIALS = 1000;
-    const int N = 100000;
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    Timer2<std::milli> timer;
     bool assertion = true;
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
     // TODO: Setup initial variables
     int* in;
@@ -126,38 +115,50 @@ int main() {
             }
             cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
             cudaMemset(d_result, 0, sizeof(int));
-
-            int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-            timer.start();
+            
             switch (i) {
                 case LIBRARY:
+                    timer.start();
                     result = thrust::count(thrust::device, in, in + N, 1);
+                    timer.stop();
                     break;
                 case GPT3:
+                    cudaEventRecord(start, 0);
                     gpt_countEquals<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
                 case GPT4:
                     // TODO: GPT4
                     break;
                 case COPILOT:
+                    cudaEventRecord(start, 0);
                     copilot_countTarget<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
                 case GEMINI:
+                    cudaEventRecord(start, 0);
                     gemini_count_targets<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
             }
-            timer.stop();
+            
             if (j != 0) {
-                sum += timer.getElapsedTime();
-                // printf("time for trial %d: %f\n", j, timer.getElapsedTime());
+                if (i == 0){
+                    sum += timer.getElapsedTime();
+                } else {
+                    float elapsedTime;
+                    cudaEventElapsedTime(&elapsedTime, start, stop);
+                    sum += elapsedTime;
+                }
             }
 
             // TODO: Verify results with library
             if (i != 0) {
                 int intended_result = thrust::count(thrust::device, in, in + N, 1);
                 cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
-                // printf("\tresult: %d\n", result);
-                // printf("\tintended_result: %d\n", intended_result);
                 assertion = (result == intended_result);
                 if (!assertion) {
                     printf("\tintended_result: %d, actual result: %d\n", intended_result, result);
@@ -170,8 +171,11 @@ int main() {
             printf("\tIncorrect output! Continuing...\n");
             continue;
         }
-        printf("\ttotal avg time (nanoseconds): %f\n", sum / (NUM_TRIALS - 1));
+        printf("\ttotal avg time (milliseconds): %f\n", sum / (NUM_TRIALS - 1));
     }
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
 
     // TODO: Free as needed
     cudaFree(d_result);

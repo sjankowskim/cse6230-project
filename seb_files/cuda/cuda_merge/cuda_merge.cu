@@ -4,14 +4,15 @@
 #include <thrust/execution_policy.h>
 #include <assert.h>
 
+#define BLOCK_SIZE       (256)
+#define NUM_TRIALS      (1000)
+#define ARRAY_SIZE      (1000)
+#define TOTAL_SIZE      (2000)
+
 /*-------------------------------*
  | CODE WRITTEN IN THIS SECITON  |
  | WAS DONE BY AN LLM!           |
  *-------------------------------*/
-
-#define BLOCK_SIZE (256)
-#define ARRAY_SIZE (1000)
-#define TOTAL_SIZE (2000)
 
 __global__ void gpt_mergeSortedArrays(int* array1, int* array2, int* mergedArray) {
     int tid = threadIdx.x;
@@ -117,10 +118,13 @@ int compare(const void *a, const void *b) {
 }
 
 int main() {
-    Timer<std::nano> timer;
-    int const NUM_TRIALS = 1000;
-    const int N = 100000;
+    int num_blocks = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    Timer2<std::milli> timer;
     bool assertion = true;
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
     // TODO: Setup initial variables
     int *in_1;
@@ -168,29 +172,44 @@ int main() {
             cudaMemcpy(in_1, temp_1, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
             cudaMemcpy(in_2, temp_2, ARRAY_SIZE * sizeof(int), cudaMemcpyHostToDevice);
             cudaMemset(result, 0, TOTAL_SIZE * sizeof(int));
-
-            int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-            timer.start();
+            
             switch (i) {
                 case LIBRARY:
+                    timer.start();
                     thrust::merge(thrust::device, in_1, in_1 + ARRAY_SIZE, in_2, in_2 + ARRAY_SIZE, result);
+                    timer.stop();
                     break;
                 case GPT3:
+                    cudaEventRecord(start, 0);
                     gpt_mergeSortedArrays<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
                 case GPT4:
                     // TODO: GPT4
                     break;
                 case COPILOT:
+                    cudaEventRecord(start, 0);
                     copilot_mergeSortedArrays<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result, ARRAY_SIZE);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
                 case GEMINI:
+                    cudaEventRecord(start, 0);
                     gemini_merge<<<num_blocks, BLOCK_SIZE>>>(in_1, in_2, result, ARRAY_SIZE);
+                    cudaEventRecord(stop, 0);
+                    cudaEventSynchronize(stop);
                     break;
             }
-            timer.stop();
+            
             if (j != 0) {
-                sum += timer.getElapsedTime();
+                if (i == 0){
+                    sum += timer.getElapsedTime();
+                } else {
+                    float elapsedTime;
+                    cudaEventElapsedTime(&elapsedTime, start, stop);
+                    sum += elapsedTime;
+                }
             }
 
             // TODO: Verify results with library
@@ -226,8 +245,11 @@ int main() {
             printf("\tIncorrect output! Continuing...\n");
             continue;
         }
-        printf("\ttotal avg time (nanoseconds): %f\n", sum / (NUM_TRIALS - 1));
+        printf("\ttotal avg time (milliseconds): %f\n", sum / (NUM_TRIALS - 1));
     }
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
 
     // TODO: Free as needed
     cudaFree(in_1);
