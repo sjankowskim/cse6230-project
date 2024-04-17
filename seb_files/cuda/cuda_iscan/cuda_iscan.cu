@@ -1,6 +1,6 @@
 #include <cuda.h>
 #include "../../../utils.hpp"
-#include <thrust/scan.h>
+#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 
 #define BLOCK_SIZE       (256)
@@ -12,136 +12,161 @@
  | WAS DONE BY CHATGPT!          |
  *-------------------------------*/
 
-__global__ void gpt_inclusiveScan(int* input, int* output, int n) {
+__global__ void gpt3_prefixSumKernel(int *input, int *output, int size) {
+    extern __shared__ int sdata[];
+
     int tid = threadIdx.x;
-    int index = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (index < n) {
-        // Perform inclusive scan
-        int sum = 0;
-        for (int i = 0; i <= tid; ++i) {
-            sum += input[blockIdx.x * blockDim.x + i];
+    // Load input into shared memory.
+    sdata[tid] = (tid < size) ? input[tid] : 0;
+    __syncthreads();
+
+    // Build sum in place up the tree
+    for (int offset = 1; offset < size; offset *= 2) {
+        int temp;
+        if (tid >= offset) {
+            temp = sdata[tid - offset];
         }
-        output[index] = sum;
+        __syncthreads();
+        if (tid >= offset) {
+            sdata[tid] += temp;
+        }
+        __syncthreads();
+    }
+
+    // Write the result to output array
+    if (tid < size) {
+        output[tid] = sdata[tid];
     }
 }
 
-__global__ void gemini_inclusive_scan(int* A, int* B, int n) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  int thread_sum = 0; // Local variable for thread's partial sum
-
-  // Prefix scan within a warp using shared memory
-  __shared__ int shared_scan[256];
-  if (threadIdx.x < n) {
-    shared_scan[threadIdx.x] = A[threadIdx.x];
-  } else {
-    shared_scan[threadIdx.x] = 0;
-  }
-  __syncthreads();
-
-  for (int stride = blockDim.x / 2; stride >= 1; stride /= 2) {
-    if (threadIdx.x < stride) {
-      shared_scan[threadIdx.x] += shared_scan[threadIdx.x + stride];
-    }
-    __syncthreads();
-  }
-
-  // Final reduction using atomicAdd for thread-safe accumulation
-  if (threadIdx.x < n) {
-    thread_sum = atomicAdd(&B[i], shared_scan[threadIdx.x]);
-  }
-
-  // Exclusive prefix sum within a warp for efficient propagation (modified)
-  __shared__ int shared_exclusive_scan[256];
-  shared_exclusive_scan[threadIdx.x] = thread_sum;
-  __syncthreads();
-
-  for (int stride = blockDim.x / 2; stride >= 1; stride /= 2) {
-    if (threadIdx.x < stride) {
-      int temp = shared_exclusive_scan[threadIdx.x];
-      shared_exclusive_scan[threadIdx.x] += shared_exclusive_scan[threadIdx.x + stride];
-      shared_exclusive_scan[threadIdx.x + stride] = temp; // Swap for correct propagation
-    }
-    __syncthreads();
-  }
-
-  // Add prefix sum from previous block and store the final scan result
-  if (i > 0) {
-    B[i] = thread_sum + shared_exclusive_scan[threadIdx.x - 1];
-  } else { // Special case for the first element (no previous block sum)
-    B[i] = thread_sum;
-  }
-}
-
-__global__ void copilot_scan_kernel(int *g_odata, int *g_idata, int n) {
-    extern __shared__ int temp[]; // allocated on invocation
-
+__global__ void gpt4_inclusive_scan_kernel(int *input, int *output, int n) {
+    extern __shared__ int temp[];  // allocated on invocation
     int thid = threadIdx.x;
     int offset = 1;
 
-    temp[2*thid] = g_idata[2*thid]; // load input into shared memory
-    temp[2*thid+1] = g_idata[2*thid+1];
+    int ai = thid;
+    int bi = thid + (n/2);
 
-    // Build sum in place up the tree
-    for (int d = n>>1; d > 0; d >>= 1) {
+    // Load input into shared memory.
+    // This is assuming the block size is at least half of n
+    temp[ai] = (ai < n) ? input[ai] : 0;
+    temp[bi] = (bi < n) ? input[bi] : 0;
+
+    // Build the sum in place up the tree
+    for (int d = n >> 1; d > 0; d >>= 1) {
         __syncthreads();
-
         if (thid < d) {
-            int ai = offset*(2*thid+1)-1;
-            int bi = offset*(2*thid+2)-1;
-
+            int ai = offset * (2 * thid + 1) - 1;
+            int bi = offset * (2 * thid + 2) - 1;
             temp[bi] += temp[ai];
         }
-
         offset *= 2;
     }
 
-    // Clear the last element
-    if (thid == 0) { temp[n - 1] = 0; }
+    if (thid == 0) { temp[n - 1] = 0; } // clear the last element
 
-    // Traverse down the tree
+    // Traverse down tree & build scan
     for (int d = 1; d < n; d *= 2) {
         offset >>= 1;
         __syncthreads();
-
         if (thid < d) {
-            int ai = offset*(2*thid+1)-1;
-            int bi = offset*(2*thid+2)-1;
-
+            int ai = offset * (2 * thid + 1) - 1;
+            int bi = offset * (2 * thid + 2) - 1;
             int t = temp[ai];
             temp[ai] = temp[bi];
             temp[bi] += t;
         }
     }
-
     __syncthreads();
 
     // Write results to device memory
-    g_odata[2*thid] = temp[2*thid];
-    g_odata[2*thid+1] = temp[2*thid+1];
+    if (ai < n) output[ai] = temp[ai];
+    if (bi < n) output[bi] = temp[bi];
+}
+
+__global__ void gemini_prefix_sum(int* A, int* B, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int thread_sum = 0; // Local thread sum
+
+  // Calculate prefix sum for the first element efficiently (no reduction)
+  if (i == 0) {
+    thread_sum = A[0];
+  } else {
+    // Reduction within a warp to efficiently calculate prefix sum for remaining elements
+    __shared__ int shared_sum[32];  // Shared memory for warp-level reduction
+    int offset = threadIdx.x / 32;
+    int lane_idx = threadIdx.x % 32;
+
+    if (lane_idx == 0) {
+      shared_sum[lane_idx] = (i < n) ? A[i] : 0;
+    }
+    __syncthreads();
+
+    for (int stride = 1; stride <= 16; stride *= 2) {
+      if (lane_idx < stride) {
+        shared_sum[lane_idx] += shared_sum[lane_idx + stride];
+      }
+      __syncthreads();
+    }
+
+    // Final accumulation considering warp offset
+    thread_sum = (offset * 32 + lane_idx < n) ? shared_sum[lane_idx] : 0;
+  }
+
+  // Add prefix sum from previous block (scan approach)
+  if (i > 0) {
+    thread_sum += B[i - 1];
+  }
+
+  // Store the result in the output array
+  if (i < n) {
+    B[i] = thread_sum;
+  }
+}
+
+__global__ void copilot_prefixSum(int *input, int *output, int size) {
+    extern __shared__ int temp[];
+    int tid = threadIdx.x;
+
+    // Load input into shared memory.
+    temp[2*tid] = (2*tid < size) ? input[2*tid] : 0;
+    temp[2*tid+1] = (2*tid+1 < size) ? input[2*tid+1] : 0;
+    __syncthreads();
+
+    // Up-sweep phase.
+    for (int stride = 1; stride <= blockDim.x; stride *= 2) {
+        int index = (tid+1)*stride*2 - 1;
+        if (index < 2*blockDim.x) {
+            temp[index] += temp[index-stride];
+        }
+        __syncthreads();
+    }
+
+    // Down-sweep phase.
+    for (int stride = blockDim.x/2; stride > 0; stride /= 2) {
+        __syncthreads();
+        int index = (tid+1)*stride*2 - 1;
+        if (index + stride < 2*blockDim.x) {
+            temp[index+stride] += temp[index];
+        }
+    }
+    __syncthreads();
+
+    // Write the output.
+    if (2*tid < size) output[2*tid] = temp[2*tid];
+    if (2*tid+1 < size) output[2*tid+1] = temp[2*tid+1];
 }
 
 /*-------------------------------*
  |         END SECTION           |
  *-------------------------------*/
 
-bool array_equals(int* arr1, int* arr2, int n) {
-    for (int i = 0; i < n; i++) {
-        if (arr1[i] != arr2[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
 int main() {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    Timer2<std::milli> timer;
+    Timer<std::nano> timer;
     bool assertion = true;
-
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
+    std::chrono::duration<double, std::nano> sum(0);
 
     // TODO: Setup initial variables
     int *in;
@@ -151,12 +176,22 @@ int main() {
     cudaMalloc(&in, N * sizeof(int));
     cudaMalloc(&out, N * sizeof(int));
 
-    for (int i = 0; i < 5; i++) {
-        double sum = 0;
+    // TODO: Setup CUB stuff as needed
+    void *d_temp_storage = NULL;
+    size_t temp_storage_bytes = 0;
+    cub::DeviceScan::InclusiveSum(
+                        d_temp_storage, temp_storage_bytes, in, out, N);
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+
+    for (int i = 0; i < 6; i++) {
+        sum = std::chrono::duration<double, std::nano>(0);
 
         switch (i) {
-            case LIBRARY:
-                printf("Testing library call!\n");
+            case CUB:
+                printf("Testing CUB!\n");
+                break;
+            case THRUST:
+                printf("Testing Thrust!\n");
                 break;
             case GPT3:
                 printf("Testing GPT-3.5!\n");
@@ -181,76 +216,63 @@ int main() {
                 temp[k] = rand() % 1000;
             }
             cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-            
+
             switch (i) {
-                case LIBRARY:
+                case CUB:
+                    timer.start();
+                    cub::DeviceScan::InclusiveSum(
+                        d_temp_storage, temp_storage_bytes, in, out, N);
+                    cudaDeviceSynchronize();
+                    timer.stop();
+                    break;
+                case THRUST:
                     timer.start();
                     thrust::inclusive_scan(thrust::device, in, in + N, out);
+                    cudaDeviceSynchronize();
                     timer.stop();
                     break;
                 case GPT3:
-                    cudaEventRecord(start, 0);
-                    gpt_inclusiveScan<<<1, BLOCK_SIZE>>>(in, out, N);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    timer.start();
+                    gpt3_prefixSumKernel<<<1, N, N * sizeof(int)>>>(in, out, N);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
                 case GPT4:
-                    // TODO: GPT4
+                    // DID NOT WORK, CRASHES PROGRAM!
+                    // timer.start();
+                    // gpt4_inclusive_scan_kernel<<<num_blocks, BLOCK_SIZE, BLOCK_SIZE * sizeof(int)>>>(in, out, N);
+                    // cudaDeviceSynchronize();
+                    // timer.stop();
                     break;
                 case COPILOT:
-                    cudaEventRecord(start, 0);
-                    copilot_scan_kernel<<<1, N/2, N * sizeof(int)>>>(in, out, N);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    timer.start();
+                    copilot_prefixSum<<<num_blocks, BLOCK_SIZE, 2 * BLOCK_SIZE * sizeof(int)>>>(in, out, N);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
                 case GEMINI:
-                    cudaEventRecord(start, 0);
-                    gemini_inclusive_scan<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    timer.start();
+                    gemini_prefix_sum<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
             }
             
             if (j != 0) {
-                if (i == 0){
-                    sum += timer.getElapsedTime();
-                } else {
-                    float elapsedTime;
-                    cudaEventElapsedTime(&elapsedTime, start, stop);
-                    sum += elapsedTime;
-                }
+                sum += timer.getElapsedTimeChrono();
             }
 
             // TODO: Verify results with library
-            if (i != 0) {
+            if (i != 0 && i != 1) {
                 int* test_out;
                 cudaMalloc(&test_out, N * sizeof(int));
-
-                int* llm_arr = (int*) malloc(N * sizeof(int));
-                int* test_arr = (int*) malloc(N * sizeof(int));
-
-                if (!llm_arr || !test_arr) {
-                    free(llm_arr);
-                    free(test_arr);
-                    printf("malloc failed!\n");
-                    return 1;
-                }
-
-                thrust::inclusive_scan(thrust::device, in, in + N, test_out);
-                cudaMemcpy(llm_arr, out, N * sizeof(int), cudaMemcpyDeviceToHost);
-                cudaMemcpy(test_arr, test_out, N * sizeof(int), cudaMemcpyDeviceToHost);
+                cub::DeviceScan::InclusiveSum(
+                        d_temp_storage, temp_storage_bytes, in, test_out, N);
+                assertion = thrust::equal(thrust::device, out, out + N, test_out);
                 cudaFree(test_out);
-                assertion = array_equals(test_arr, llm_arr, N); 
                 if (!assertion) {
-                    // for (int k = 0; k < N; k++) {
-                    //     printf("llm_arr[%d]: %d, \t test_arr[%d]: %d\n", k, llm_arr[k], k, test_arr[k]);
-                    // }
-                    free(llm_arr);
-                    free(test_arr);
                     break;
                 }
-                free(llm_arr);
-                free(test_arr);
             }
         }
 
@@ -258,13 +280,11 @@ int main() {
             printf("\tIncorrect output! Continuing...\n");
             continue;
         }
-        printf("\ttotal avg time (milliseconds): %f\n", sum / (NUM_TRIALS - 1));
+        printf("\ttotal avg time (nanoseconds): %f\n", sum / (NUM_TRIALS - 1));
     }
-
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
 
     // TODO: Free as needed
     cudaFree(out);
     cudaFree(in);
+    cudaFree(d_temp_storage);
 }
