@@ -1,0 +1,30 @@
+---------------------------------------
+Begin Slurm Prolog: Apr-16-2024 18:27:11
+Job ID:    593871
+User ID:   sjankowski6
+Account:   coc
+Job name:  6230-gpu
+Partition: coc-gpu
+---------------------------------------
+Testing library call!
+	total avg time (milliseconds): 0.028430
+Testing GPT-3.5!
+	Incorrect output! Continuing...
+Testing GPT-4!
+	Incorrect output! Continuing...
+Testing Copilot!
+	Incorrect output! Continuing...
+Testing Gemini!
+	Incorrect output! Continuing...
+---------------------------------------
+Begin Slurm Epilog: Apr-16-2024 18:27:12
+Job ID:        593871
+Array Job ID:  _4294967294
+User ID:       sjankowski6
+Account:       coc
+Job name:      6230-gpu
+Resources:     cpu=1,gres/gpu:v100=1,mem=12G,node=1
+Rsrc Used:     cput=00:00:02,vmem=504K,walltime=00:00:02,mem=0,energy_used=0
+Partition:     coc-gpu
+Nodes:         atl1-1-02-009-31-0
+---------------------------------------

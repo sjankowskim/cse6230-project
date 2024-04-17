@@ -3,7 +3,6 @@ test_code
 
 # Ignore slurm result files & manually created output files
 *.json
-*.out
 
 # Ignore Makefile-generated output files
 *.o
