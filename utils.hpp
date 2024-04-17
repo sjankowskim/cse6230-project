@@ -59,45 +59,12 @@ class Timer
         }
 
     private:
-        using Clock = std::chrono::high_resolution_clock;
+        using Clock = std::chrono::steady_clock;
 
-        std::chrono::high_resolution_clock::time_point currentTime;
-        std::chrono::high_resolution_clock::time_point previousTime;
+        std::chrono::steady_clock::time_point currentTime;
+        std::chrono::steady_clock::time_point previousTime;
 };
 
-template <typename Ratio = std::ratio<1>>
-class Timer2
-{
-    public:
-        Timer2() = default;
-
-        void start() 
-        {
-            start_time = Clock::now();
-        }
-
-        void stop()
-        {
-            end_time = Clock::now();
-        }
-
-        double getElapsedTime()
-        {
-            std::chrono::duration<double, Ratio> elapsed = (end_time - start_time);
-            return elapsed.count();
-        }
-
-        std::chrono::duration<double, Ratio> getElapsedTimeChrono()
-        {
-            return (end_time - start_time);
-        }
-
-    private:
-        using Clock = std::chrono::high_resolution_clock;
-
-        std::chrono::high_resolution_clock::time_point start_time;
-        std::chrono::high_resolution_clock::time_point end_time;
-};
 
 // =================
 // Helper Functions
@@ -143,11 +110,8 @@ char* find_string_option(int argc, char** argv, const char* option, char* defaul
 }
 
 template <typename Container>
-void initRandomContainer(Container& container, size_t size, int seed)
+void initRandomContainer(Container& container, size_t size, int seed, std::mt19937 gen)
 {
-    static std::random_device rd;
-    static std::mt19937 gen(seed ? seed : rd());
-
     for (int i = 0; i < size; ++i)
     {
         container[i] = i;
@@ -165,8 +129,12 @@ bool containersAreEqual(Container& container1, Container& container2)
 template <typename Container, typename Lambda>
 double runTests(Container& container, int repitions, Lambda& lambda, size_t size = 10'000, int seed = 1)
 {
+    // Intialize RNG 
+    std::random_device rd;
+    std::mt19937 gen(seed ? seed : rd());
+
     Timer<std::nano> timer;
-    double averageTime = 0;
+    double averageTime = timer.getElapsedTime();
 
     for (int i = 0; i < repitions; ++i)
     {
