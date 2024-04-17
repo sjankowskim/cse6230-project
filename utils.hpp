@@ -38,31 +38,30 @@ class Timer
 
         void start() 
         {
-            currentTime = Clock::now();
+            start_time = Clock::now();
         }
 
         void stop()
         {
-            previousTime = currentTime;
-            currentTime = Clock::now();
+            end_time = Clock::now();
         }
 
         double getElapsedTime()
         {
-            std::chrono::duration<double, Ratio> elapsed = (currentTime - previousTime);
+            std::chrono::duration<double, Ratio> elapsed = (end_time - start_time);
             return elapsed.count();
         }
 
         std::chrono::duration<double, Ratio> getElapsedTimeChrono()
         {
-            return (currentTime - previousTime);
+            return (end_time - start_time);
         }
 
     private:
         using Clock = std::chrono::steady_clock;
 
-        std::chrono::steady_clock::time_point currentTime;
-        std::chrono::steady_clock::time_point previousTime;
+        std::chrono::steady_clock::time_point start_time;
+        std::chrono::steady_clock::time_point end_time;
 };
 
 
