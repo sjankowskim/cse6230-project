@@ -44,7 +44,7 @@ int main(int argc, char** argv)
     int seed = find_int_arg(argc, argv, "-s", DEFAULTSEED);
     auto policy = std::execution::par;
 
-    Timer timer;
+    Timer<std::nano> timer;
 
     std::vector<int> libraryArr(size * 2);
     std::vector<int> gptArr(size * 2);
@@ -74,6 +74,9 @@ int main(int argc, char** argv)
     printStats("Library Average: ", averageLibraryTime, "ns");
     auto averageGPTTime = runTests(testVector1, DEFAULTREPS, gptLambda, size, seed);
     printStats("ChatGPT Average: ", averageGPTTime, "ns");
+
+    bool validateGPT = containersAreEqual(libraryArr, gptArr);
+    printStats("Validation: ", validateGPT ? "correct" : "incorrect", "");
 
     return 0;
 }

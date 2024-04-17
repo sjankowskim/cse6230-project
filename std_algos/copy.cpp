@@ -28,7 +28,7 @@ void parallelCopyVector(const std::vector<T>& src, std::vector<T>& dest) {
     size_t n = src.size();
     dest.resize(n);  // Ensure destination is large enough.
 
-    #pragma omp parallel for
+    #pragma omp parallel for 
     for (size_t i = 0; i < n; ++i) {
         dest[i] = src[i];
     }
@@ -44,7 +44,17 @@ int main(int argc, char** argv)
     int seed = find_int_arg(argc, argv, "-s", DEFAULTSEED);
     auto policy = std::execution::par;
 
-    Timer timer;
+#pragma omp parallel  
+{
+    #pragma omp master
+    {
+    int num = omp_get_num_threads();
+    std::cout << "Number of threads: " << num << std::endl;
+    }
+    
+}
+
+    Timer<std::nano> timer;
 
     std::vector<int> libraryArr(size);
     std::vector<int> gptArr(size);
@@ -52,10 +62,17 @@ int main(int argc, char** argv)
     // Additional vectors for testing
     std::vector<int> testVector(size);
     
+    // Additional vectors for verification
+    std::vector<bool> libraryVerification(DEFAULTREPS);
+    std::vector<bool> gptVerification(DEFAULTREPS);
+
     auto stlLambda = [&] () {
         timer.start();
         std::copy(policy, testVector.begin(), testVector.end(), libraryArr.begin());
         timer.stop();
+        
+        bool equals = std::equal(testVector.begin(), testVector.end(), libraryArr.begin());
+        libraryVerification.push_back(equals);
 
         return timer.getElapsedTime();
     };
@@ -65,6 +82,9 @@ int main(int argc, char** argv)
         parallelCopyVector(testVector, gptArr);
         timer.stop();
 
+        bool equals = std::equal(testVector.begin(), testVector.end(), gptArr.begin());
+        gptVerification.push_back(equals);
+
         return timer.getElapsedTime();
     };
 
@@ -72,6 +92,11 @@ int main(int argc, char** argv)
     printStats("Library Average: ", averageLibraryTime, "ns");
     auto averageGPTTime = runTests(testVector, DEFAULTREPS, gptLambda, size, seed);
     printStats("ChatGPT Average: ", averageGPTTime, "ns");
+
+    bool validateGPT = containersAreEqual(libraryVerification, gptVerification);
+    printStats("Validation: ", validateGPT ? "correct" : "incorrect", "");
+
+    
 
     return 0;
 }

@@ -129,23 +129,22 @@ bool containersAreEqual(Container& container1, Container& container2)
 }
 
 template <typename Container, typename Lambda>
-double runTests(Container& container, int repitions, Lambda& lambda, size_t size = 10'000, int seed = 1)
+double runTests(Container& container, int repetitions, Lambda& lambda, size_t size = 10'000, int seed = 1)
 {
     // Intialize RNG 
     std::random_device rd;
     std::mt19937 gen(seed ? seed : rd());
 
-    Timer<std::nano> timer;
-    double averageTime = timer.getElapsedTime();
+    double averageTime = 0;
 
-    for (int i = 0; i < repitions; ++i)
+    for (int i = 0; i < repetitions; ++i)
     {
-        initRandomContainer(container, size, seed);
+        initRandomContainer(container, size, seed, gen);
         
         averageTime += lambda();
     }
     
-    return averageTime / repitions;
+    return averageTime / repetitions;
 }
 
 template <typename T>

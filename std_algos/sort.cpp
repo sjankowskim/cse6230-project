@@ -71,9 +71,9 @@ int main(int argc, char** argv)
 {
     size_t size = find_int_arg(argc, argv, "-n", DEFAULTSIZE);
     int seed = find_int_arg(argc, argv, "-s", DEFAULTSEED);
-    auto policy = std::execution::par;
+    auto policy = std::execution::seq;
 
-    Timer timer;
+    Timer<std::nano> timer;
 
     std::vector<int> libraryArr(size);
     std::vector<int> gptArr(size);
@@ -82,13 +82,18 @@ int main(int argc, char** argv)
     std::set<std::thread::id> thread_ids;
     std::mutex mutex;
 
-    auto stlLambda = [&] () {
-        std::sort(policy, libraryArr.begin(), libraryArr.end(), [&](int i, int j){
+    auto stlLambda = [&]()
+    {
+        timer.start();
+        std::sort(policy, libraryArr.begin(), libraryArr.end(), [&](int i, int j)
+                  {
             const std::lock_guard<std::mutex> lock(mutex);
             thread_ids.insert(std::this_thread::get_id());
 
-            return i < j;
-        });
+            return i < j; });
+        timer.stop();
+
+        return timer.getElapsedTime();
     };
 #else
     auto stlLambda = [&] () {
@@ -113,6 +118,9 @@ int main(int argc, char** argv)
     auto averageGPTTime = runTests(gptArr, DEFAULTREPS, gptLambda, size, seed);
     printStats("ChatGPT Average: ", averageGPTTime, "ns");
 
+
+    bool validateGPT = containersAreEqual(libraryArr, gptArr);
+    printStats("Validation: ", validateGPT ? "correct" : "incorrect", "");
 #ifdef DEBUG
     std::cout << "Number of threads: " << thread_ids.size() << std::endl;
 #endif
