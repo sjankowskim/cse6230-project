@@ -1,67 +1,80 @@
-#include <iostream>
-#include <cuda_runtime.h>
+#include <cuda.h>
+#include "../../../utils.hpp"
+#include <thrust/gather.h>
+#include <thrust/equal.h>
+#include <thrust/execution_policy.h>
 
-__global__ void sumKernel(int *input, int size, int *result) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int sum = 0;
+__global__ void filter_and_count(int* A, int* flag, int n, int* B, int* num_active) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int write_idx = 0; // Index for writing to output array (atomic)
 
-    // Calculate sum of elements by each thread
-    while (tid < size) {
-        sum += input[tid];
-        tid += blockDim.x * gridDim.x;
+  // Check for threads exceeding valid array bounds
+  if (i < n) {
+    if (flag[i] == 1) {
+      // Use atomic operations for thread-safe writing to output
+      B[atomicAdd(&write_idx, 1) - 1] = A[i];
+      atomicAdd(num_active, 1);
     }
-
-    // Reduce sum across threads in a block
-    __shared__ int sdata[256];
-    sdata[threadIdx.x] = sum;
-    __syncthreads();
-
-    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (threadIdx.x < s) {
-            sdata[threadIdx.x] += sdata[threadIdx.x + s];
-        }
-        __syncthreads();
-    }
-
-    // Write block sum to global memory
-    if (threadIdx.x == 0) {
-        atomicAdd(result, sdata[0]);
-    }
+  }
 }
 
-void calculateSum(int *input, int size, int *result) {
-    int *d_input, *d_result;
-
-    cudaMalloc((void **)&d_input, size * sizeof(int));
-    cudaMalloc((void **)&d_result, sizeof(int));
-
-    cudaMemcpy(d_input, input, size * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemset(d_result, 0, sizeof(int));
-
-    int blockSize = 256;
-    int gridSize = (size + blockSize - 1) / blockSize;
-
-    sumKernel<<<gridSize, blockSize>>>(d_input, size, d_result);
-
-    cudaMemcpy(result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_input);
-    cudaFree(d_result);
-}
+#define BLOCK_SIZE       (256)
+#define NUM_TRIALS      (1000)
+#define N             (100000)
 
 int main() {
-    const int size = 1000000;
-    int *array = new int[size];
-    for (int i = 0; i < size; ++i) {
-        array[i] = i; // Example array initialization
-    }
+  // Host memory allocation (replace n with your array size)
+  int n = N;
+  int A[n];
+  int flag[n]; // Flag array with 1s and 0s
+  int B[n]; // Output array to store filtered elements
+  int num_active = 0; // Counter for active flags (atomic)
 
-    int sum = 0;
-    calculateSum(array, size, &sum);
+  // Initialize arrays (replace with your initialization logic)
+  for (int i = 0; i < n; i++) {
+    A[i] = rand(); // Example initialization for input array
+    flag[i] = rand() % 2; // Example initialization for flag array (alternating 1s and 0s)
+  }
 
-    std::cout << "Sum of array elements: " << sum << std::endl;
+  // Device memory allocation
+  int *A_d, *flag_d, *B_d;
+  cudaMalloc(&A_d, n * sizeof(int));
+  cudaMalloc(&flag_d, n * sizeof(int));
+  cudaMalloc(&B_d, n * sizeof(int));
 
-    delete[] array;
+  // Copy data from host to device
+  cudaMemcpy(A_d, A, n * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(flag_d, flag, n * sizeof(int), cudaMemcpyHostToDevice);
 
-    return 0;
+  // Kernel launch with appropriate grid size
+  int threadsPerBlock = 256;
+  int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
+  Timer<std::nano> timer;
+  std::chrono::duration<double, std::nano> sum(0);
+  
+  for (int i = 0; i < NUM_TRIALS; i++) {
+    timer.start();
+    filter_and_count<<<blocksPerGrid, threadsPerBlock>>>(A_d, flag_d, n, B_d, &num_active);
+    cudaDeviceSynchronize();
+    timer.stop();
+    sum += timer.getElapsedTimeChrono();
+  }
+
+  printf("sum: %f\n", sum / NUM_TRIALS);
+  // Allocate space to store the number of active flags on host
+  int num_active_host;
+
+  // Copy result from device to host
+  cudaMemcpy(&num_active_host, &num_active, sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpy(B, B_d, n * sizeof(int), cudaMemcpyDeviceToHost); // Optional (copy filtered elements if needed)
+
+  // Print results (optional)
+  printf("Number of active flags: %d\n", num_active_host);
+
+  // Free device memory
+  cudaFree(A_d);
+  cudaFree(flag_d);
+  cudaFree(B_d);
+
+  return 0;
 }

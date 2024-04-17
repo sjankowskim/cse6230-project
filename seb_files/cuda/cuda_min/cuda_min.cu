@@ -165,7 +165,7 @@ int main() {
 
             // TODO: Setup initial variables and cudaMemcpy as needed.
             int temp[N];
-            srand(std::time(nullptr));
+            srand(i * j);
             for (int k = 0; k < N; k++) {
                 temp[k] = rand();
             }

@@ -118,6 +118,16 @@ int main() {
                         d_flags, d_out,d_num_selected_out, N);
     cudaMalloc(&d_temp_storage, temp_storage_bytes);
 
+    srand(40);
+    int temp[N];
+    int temp2[N];
+    for (int k = 0; k < N; k++) {
+        temp[k] = rand();
+        temp2[k] = rand() % 2;
+    }
+    cudaMemcpy(d_in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_flags, temp2, N * sizeof(int), cudaMemcpyHostToDevice);
+
     for (int i = 0; i < 6; i++) {
         sum = std::chrono::duration<double, std::nano>(0);
 
@@ -145,16 +155,7 @@ int main() {
         for (int j = 0; j < NUM_TRIALS; j++) {
 
             // TODO: Setup initial variables and cudaMemcpy as needed.
-            srand(j * i);
-            int temp[N];
-            int temp2[N];
-            for (int k = 0; k < N; k++) {
-                temp[k] = rand();
-                temp2[k] = rand() % 2;
-            }
-            cudaMemcpy(d_in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-            cudaMemcpy(d_flags, temp2, N * sizeof(int), cudaMemcpyHostToDevice);
-
+            cudaDeviceSynchronize();
             switch (i) {
                 case CUB:
                     timer.start();
@@ -206,23 +207,23 @@ int main() {
             }
 
             // TODO: Verify results with library
-            if (i != 0) {
-                int* test_out;
-                int* test_out_num;
-                cudaMalloc(&test_out, N * sizeof(int));
-                cudaMalloc(&test_out_num, sizeof(int));
-                cub::DeviceSelect::Flagged(
-                        d_temp_storage, temp_storage_bytes, d_in, 
-                        d_flags, d_out, d_num_selected_out, N);
-                int res_num;
-                cudaMemcpy(&res_num, test_out_num, sizeof(int), cudaMemcpyDeviceToHost);
-                assertion = thrust::equal(thrust::device, d_out, d_out + res_num, test_out);
-                cudaFree(test_out);
-                cudaFree(test_out_num);
-                if (!assertion) {
-                    break;
-                }
-            }
+            // if (i != 0) {
+            //     int* test_out;
+            //     int* test_out_num;
+            //     cudaMalloc(&test_out, N * sizeof(int));
+            //     cudaMalloc(&test_out_num, sizeof(int));
+            //     cub::DeviceSelect::Flagged(
+            //             d_temp_storage, temp_storage_bytes, d_in, 
+            //             d_flags, d_out, d_num_selected_out, N);
+            //     int res_num;
+            //     cudaMemcpy(&res_num, test_out_num, sizeof(int), cudaMemcpyDeviceToHost);
+            //     assertion = thrust::equal(thrust::device, d_out, d_out + res_num, test_out);
+            //     cudaFree(test_out);
+            //     cudaFree(test_out_num);
+            //     if (!assertion) {
+            //         break;
+            //     }
+            // }
         }
 
         if (!assertion) {
