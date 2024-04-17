@@ -154,4 +154,3 @@ void printStats(std::string message, T value, std::string unit, int precision = 
     std::cout << std::fixed << std::setprecision(3);
     std::cout << message << std::setw(20) << value << " " << unit << '\n';
 }
-

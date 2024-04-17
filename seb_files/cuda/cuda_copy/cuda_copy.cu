@@ -1,7 +1,6 @@
 #include <cuda.h>
+#include <cub/cub.cuh>
 #include "../../../utils.hpp"
-#include <thrust/scan.h>
-#include <thrust/execution_policy.h>
 
 #define BLOCK_SIZE       (256)
 #define NUM_TRIALS      (1000)
@@ -54,12 +53,8 @@ bool array_equals(int* arr1, int* arr2, int n) {
 
 int main() {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    Timer2<std::milli> timer;
+    Timer<std::nano> timer;
     bool assertion = true;
-
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
 
     // TODO: Setup initial variables
     int* in;
@@ -70,7 +65,7 @@ int main() {
     cudaMalloc(&out, N * sizeof(int));
 
     for (int i = 0; i < 5; i++) {
-        double sum = 0;
+        std::chrono::duration<double, std::nano> sum(0);
 
         switch (i) {
             case LIBRARY:
@@ -99,51 +94,47 @@ int main() {
                 temp[k] = rand() % 1000;
             }
             cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-            
+
             switch (i) {
                 case LIBRARY:
                     timer.start();
-                    thrust::copy(thrust::device, in, in + N, out);
+                    // TODO: thrust call
+                    cudaDeviceSynchronize();
                     timer.stop();
                     break;
                 case GPT3:
-                    cudaEventRecord(start, 0);
+                    timer.start();
                     gpt_copyArray<<<num_blocks, BLOCK_SIZE>>>(in, in + N, out);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
                 case GPT4:
                     // TODO: GPT4
                     break;
                 case COPILOT:
-                    cudaEventRecord(start, 0);
+                    timer.start();
                     copilot_array_copy<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
                 case GEMINI:
-                    cudaEventRecord(start, 0);
+                    timer.start();
                     gemini_copy_array<<<num_blocks, BLOCK_SIZE>>>(in, out, N);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
             }
             
             if (j != 0) {
-                if (i == 0){
-                    sum += timer.getElapsedTime();
-                } else {
-                    float elapsedTime;
-                    cudaEventElapsedTime(&elapsedTime, start, stop);
-                    sum += elapsedTime;
-                }
+                sum += timer.getElapsedTimeChrono();
             }
 
             // TODO: Verify results with library
             if (i != 0) {
                 int* d_temp_out;
                 cudaMalloc(&d_temp_out, N * sizeof(int));
-                thrust::copy(thrust::device, in, in + N, d_temp_out);
+                // TODO: Thrust call
+                // cub::DeviceCopy::Batched(d_temp_out, in, N);
                 int h_temp_out[N];
                 int h_llm_out[N];
                 cudaMemcpy(h_temp_out, d_temp_out, N * sizeof(int), cudaMemcpyDeviceToHost);
@@ -159,11 +150,8 @@ int main() {
             printf("\tIncorrect output! Continuing...\n");
             continue;
         }
-        printf("\ttotal avg time (milliseconds): %f\n", sum / (NUM_TRIALS - 1));
+        printf("\ttotal avg time (nanoseconds): %f\n", sum / (NUM_TRIALS - 1));
     }
-
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
 
     // TODO: Free as needed
     cudaFree(out);
