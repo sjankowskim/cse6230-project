@@ -153,4 +153,3 @@ void printStats(std::string message, T value, std::string unit)
 {
     std::cout << message << std::setw(20) << value << " " << unit << '\n';
 }
-

@@ -1,6 +1,6 @@
 #include <cuda.h>
 #include "../../../utils.hpp"
-#include <thrust/scan.h>
+#include <thrust/count.h>
 #include <thrust/execution_policy.h>
 
 #define BLOCK_SIZE       (256)
@@ -66,14 +66,19 @@ __global__ void gemini_count_targets(int* A, int n, int target, int* partial_cou
  |         END SECTION           |
  *-------------------------------*/
 
+struct CustomReduce
+{
+    template <typename T>
+    __host__ __forceinline__
+    T operator()(const T &a, const T &b) const {
+        return (b < a) ? b : a;
+    }
+};
+
 int main() {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    Timer2<std::milli> timer;
+    Timer<std::nano> timer;
     bool assertion = true;
-
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
 
     // TODO: Setup initial variables
     int* in;
@@ -85,7 +90,7 @@ int main() {
     cudaMalloc(&d_result, sizeof(int));
 
     for (int i = 0; i < 5; i++) {
-        double sum = 0;
+        std::chrono::duration<double, std::nano> sum(0);
 
         switch (i) {
             case LIBRARY:
@@ -115,44 +120,39 @@ int main() {
             }
             cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
             cudaMemset(d_result, 0, sizeof(int));
-            
+
             switch (i) {
                 case LIBRARY:
                     timer.start();
                     result = thrust::count(thrust::device, in, in + N, 1);
+                    cudaDeviceSynchronize();
                     timer.stop();
                     break;
                 case GPT3:
-                    cudaEventRecord(start, 0);
+                    timer.start();
                     gpt_countEquals<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
                 case GPT4:
                     // TODO: GPT4
                     break;
                 case COPILOT:
-                    cudaEventRecord(start, 0);
+                    timer.start();
                     copilot_countTarget<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
                 case GEMINI:
-                    cudaEventRecord(start, 0);
+                    timer.start();
                     gemini_count_targets<<<num_blocks, BLOCK_SIZE>>>(in, N, 1, d_result);
-                    cudaEventRecord(stop, 0);
-                    cudaEventSynchronize(stop);
+                    cudaDeviceSynchronize();
+                    timer.stop();
                     break;
             }
             
             if (j != 0) {
-                if (i == 0){
-                    sum += timer.getElapsedTime();
-                } else {
-                    float elapsedTime;
-                    cudaEventElapsedTime(&elapsedTime, start, stop);
-                    sum += elapsedTime;
-                }
+                sum += timer.getElapsedTimeChrono();
             }
 
             // TODO: Verify results with library
@@ -171,11 +171,8 @@ int main() {
             printf("\tIncorrect output! Continuing...\n");
             continue;
         }
-        printf("\ttotal avg time (milliseconds): %f\n", sum / (NUM_TRIALS - 1));
+        printf("\ttotal avg time (nanoseconds): %f\n", sum / (NUM_TRIALS - 1));
     }
-
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
 
     // TODO: Free as needed
     cudaFree(d_result);
