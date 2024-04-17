@@ -12,33 +12,47 @@
  | WAS DONE BY AN LLM!           |
  *-------------------------------*/
 
-__global__ void gpt_findMinimum(const int* array, int size, int* result) {
+__global__ void gpt3_findMinKernel(int *input, int size, int *min) {
     extern __shared__ int sdata[];
 
     unsigned int tid = threadIdx.x;
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // Load data to shared memory
-    if (i < size) {
-        sdata[tid] = array[i];
-    } else {
-        sdata[tid] = INT_MAX;
-    }
-
+    sdata[tid] = (i < size) ? input[i] : INT_MAX;
     __syncthreads();
 
-    // Perform reduction in shared memory
     for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
+        if (tid < s && sdata[tid + s] < sdata[tid]) {
+            atomicMin(min, sdata[tid + s]);
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        atomicMin(min, sdata[0]);
+    }
+}
+
+__global__ void gpt4_findMinKernel(int *array, int size, int *minVal) {
+    extern __shared__ int sdata[];
+
+    unsigned int tid = threadIdx.x;
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Load shared mem from global mem
+    sdata[tid] = (i < size) ? array[i] : INT_MAX;
+    __syncthreads();
+
+    // Perform reduction in shared mem
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s && (i + s) < size) {
             sdata[tid] = min(sdata[tid], sdata[tid + s]);
         }
         __syncthreads();
     }
 
-    // Write the result for this block to global memory
-    if (tid == 0) {
-        atomicMin(result, sdata[0]);
-    }
+    // Write result for this block to global mem
+    if (tid == 0) atomicMin(minVal, sdata[0]);
 }
 
 __global__ void copilot_findMinimum(int *array, int size, int *result) {
@@ -105,10 +119,12 @@ int main() {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
     Timer<std::nano> timer;
     bool assertion = true;
+    std::chrono::duration<double, std::nano> sum(0);
 
     // TODO: Setup initial variables
     int* in;
     int* d_result;
+    int* h_result;
 
     // TODO: cudaMalloc as needed
     cudaMalloc(&in, N * sizeof(int));
@@ -121,12 +137,15 @@ int main() {
         d_temp_storage, temp_storage_bytes, in, d_result, N);
     cudaMalloc(&d_temp_storage, temp_storage_bytes);
 
-    for (int i = 0; i < 5; i++) {
-        std::chrono::duration<double, std::nano> sum(0);
+    for (int i = 0; i < 6; i++) {
+        sum = std::chrono::duration<double, std::nano>(0);
 
         switch (i) {
-            case LIBRARY:
-                printf("Testing library call!\n");
+            case CUB:
+                printf("Testing CUB!\n");
+                break;
+            case THRUST:
+                printf("Testing Thrust!\n");
                 break;
             case GPT3:
                 printf("Testing GPT-3.5!\n");
@@ -151,25 +170,33 @@ int main() {
                 temp[k] = rand();
             }
             cudaMemcpy(in, temp, N * sizeof(int), cudaMemcpyHostToDevice);
-            cudaMemset(d_result, 0, sizeof(int));
+
+            int min_val = INT_MAX;
+            cudaMemcpy(d_result, &min_val, sizeof(int), cudaMemcpyHostToDevice);
 
             switch (i) {
-                case LIBRARY:
+                case CUB:
                     timer.start();
                     cub::DeviceReduce::Min(
                         d_temp_storage, temp_storage_bytes, in, d_result, N);
                     cudaDeviceSynchronize();
                     timer.stop();
                     break;
+                case THRUST:
+                    timer.start();
+                    h_result = thrust::min_element(thrust::device, in, in + N);
+                    cudaDeviceSynchronize();
+                    timer.stop();
+                    break;
                 case GPT3:
                     timer.start();
-                    gpt_findMinimum<<<num_blocks, BLOCK_SIZE, BLOCK_SIZE * sizeof(int)>>>(in, N, d_result);
+                    gpt3_findMinKernel<<<num_blocks, BLOCK_SIZE, BLOCK_SIZE * sizeof(int)>>>(in, N, d_result);
                     cudaDeviceSynchronize();
                     timer.stop();
                     break;
                 case GPT4:
                     timer.start();
-                    my_find_min<<<1, 1>>>(in, N, d_result);
+                    gpt4_findMinKernel<<<num_blocks, BLOCK_SIZE, BLOCK_SIZE * sizeof(int)>>>(in, N, d_result);
                     cudaDeviceSynchronize();
                     timer.stop();
                     break;
@@ -192,7 +219,7 @@ int main() {
             }
 
             // TODO: Verify results with library
-            if (i != 0) {
+            if (i != 0 && i != 1) {
                 int *intended_result;
                 cudaMalloc(&intended_result, sizeof(int));
                 cub::DeviceReduce::Min(

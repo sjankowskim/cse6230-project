@@ -15,8 +15,9 @@
 // Helper Classes and Enums
 // ==========================
 
-enum Algorithm {
-    LIBRARY,
+enum CUDA_Algorithm {
+    CUB,
+    THRUST,
     GPT3,
     GPT4,
     COPILOT,
