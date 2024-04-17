@@ -54,7 +54,7 @@ __global__ void my_findTarget(const int* array, int size, int target, int** resu
 
 int main() {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    Timer2<std::milli> timer;
+    Timer<std::milli> timer;
     bool assertion = true;
 
     cudaEvent_t start, stop;

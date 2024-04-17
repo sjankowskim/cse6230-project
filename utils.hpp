@@ -15,12 +15,6 @@
 // Helper Classes and Enums
 // ==========================
 
-enum class Policies 
-{
-    SEQUENTIAL,
-    PARALLEL
-};
-
 enum Algorithm {
     LIBRARY,
     GPT3,
@@ -109,11 +103,20 @@ char* find_string_option(int argc, char** argv, const char* option, char* defaul
 }
 
 template <typename Container>
-void initRandomContainer(Container& container, size_t size, int seed, std::mt19937 gen)
+void defaultInit(Container& container, size_t size)
 {
     for (int i = 0; i < size; ++i)
     {
         container[i] = i;
+    }
+}
+
+template <typename Container>
+void initRandomContainer(Container& container, size_t size, int seed, std::mt19937 gen)
+{
+    for (int i = 0; i < size; ++i)
+    {
+        container[i] = gen();
     }
 
     std::shuffle(std::begin(container), std::end(container), gen);
@@ -138,19 +141,17 @@ double runTests(Container& container, int repitions, Lambda& lambda, size_t size
     for (int i = 0; i < repitions; ++i)
     {
         initRandomContainer(container, size, seed);
-        timer.start();
-        lambda();
-        timer.stop();
-
-        averageTime += timer.getElapsedTime();
+        
+        averageTime += lambda();
     }
     
     return averageTime / repitions;
 }
 
 template <typename T>
-void printStats(std::string message, T value, std::string unit)
+void printStats(std::string message, T value, std::string unit, int precision = 3)
 {
+    std::cout << std::fixed << std::setprecision(3);
     std::cout << message << std::setw(20) << value << " " << unit << '\n';
 }
 

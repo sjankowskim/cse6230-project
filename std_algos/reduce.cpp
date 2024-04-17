@@ -23,32 +23,16 @@ for your other files. Hope it helps!
  | WAS DONE BY CHATGPT!          |
  *-------------------------------*/
 
-template<typename T>
-typename std::vector<T>::iterator parallelFindInVector(std::vector<T>& vec, const T& value) {
-    typename std::vector<T>::iterator result = vec.end();
-    
-    #pragma omp parallel
-    {
-        typename std::vector<T>::iterator local_result = vec.end();
-        
-        #pragma omp for nowait
-        for (size_t i = 0; i < vec.size(); ++i) {
-            if (vec[i] == value) {
-                local_result = vec.begin() + i;
-                #pragma omp flush
-                break;
-            }
-        }
+int reduceVectorParallel(const std::vector<int>& vec) {
+    int sum = 0;
+    size_t n = vec.size();
 
-        #pragma omp critical
-        {
-            if (local_result < result) {
-                result = local_result;
-            }
-        }
+    #pragma omp parallel for reduction(+:sum)
+    for (size_t i = 0; i < n; ++i) {
+        sum += vec[i];
     }
 
-    return result;
+    return sum;
 }
 
 /*-------------------------------*
@@ -62,19 +46,40 @@ int main(int argc, char** argv)
     int seed = find_int_arg(argc, argv, "-s", DEFAULTSEED);
     auto policy = std::execution::par;
 
-    std::vector<int> systemArr;
-    std::vector<int> gptArr;
+    Timer timer;
+
+    std::vector<int> libraryArr(size);
+    std::vector<int> gptArr(size);
+
+    // Additional vectors for verification
+    std::vector<int> libraryReductions(DEFAULTREPS);
+    std::vector<int> gptReductions(DEFAULTREPS);
 
     auto stlLambda = [&] () {
-        std::equal(policy, systemArr.begin(), systemArr.end(), systemArr.begin());
+        // Time function
+        timer.start();
+        int red = std::reduce(policy, libraryArr.begin(), libraryArr.end());
+        timer.stop();
+
+        // Insert for verification
+        libraryReductions.push_back(red);
+
+        return timer.getElapsedTime();
     };
 
     auto gptLambda = [&] () {
-        parallelFindInVector(gptArr, seed);
+        // Time function
+        timer.start();
+        int red = reduceVectorParallel(gptArr);
+        timer.stop();
+
+        // Insert for verification
+        gptReductions.push_back(red);
+
+        return timer.getElapsedTime();
     };
 
-    std::cout << std::fixed << std::setprecision(3);
-    auto averageLibraryTime = runTests(systemArr, DEFAULTREPS, stlLambda, size, seed);
+    auto averageLibraryTime = runTests(libraryArr, DEFAULTREPS, stlLambda, size, seed);
     printStats("Library Average: ", averageLibraryTime, "ns");
     auto averageGPTTime = runTests(gptArr, DEFAULTREPS, gptLambda, size, seed);
     printStats("ChatGPT Average: ", averageGPTTime, "ns");

@@ -23,34 +23,16 @@ for your other files. Hope it helps!
  | WAS DONE BY CHATGPT!          |
  *-------------------------------*/
 
-template<typename T>
-typename std::vector<T>::iterator parallelFindInVector(std::vector<T>& vec, const T& value) {
-    typename std::vector<T>::iterator result = vec.end();
-    
-    #pragma omp parallel
-    {
-        typename std::vector<T>::iterator local_result = vec.end();
-        
-        #pragma omp for nowait
-        for (size_t i = 0; i < vec.size(); ++i) {
-            if (vec[i] == value) {
-                local_result = vec.begin() + i;
-                #pragma omp flush
-                break;
-            }
-        }
+template <typename T>
+void parallelCopyVector(const std::vector<T>& src, std::vector<T>& dest) {
+    size_t n = src.size();
+    dest.resize(n);  // Ensure destination is large enough.
 
-        #pragma omp critical
-        {
-            if (local_result < result) {
-                result = local_result;
-            }
-        }
+    #pragma omp parallel for
+    for (size_t i = 0; i < n; ++i) {
+        dest[i] = src[i];
     }
-
-    return result;
 }
-
 /*-------------------------------*
  |         END SECTION           |
  *-------------------------------*/
@@ -67,32 +49,28 @@ int main(int argc, char** argv)
     std::vector<int> libraryArr(size);
     std::vector<int> gptArr(size);
 
-    int libraryFinds = 0;
-    int gptFinds = 0;
-
+    // Additional vectors for testing
+    std::vector<int> testVector(size);
+    
     auto stlLambda = [&] () {
         timer.start();
-        auto itr = std::find(policy, libraryArr.begin(), libraryArr.end(), seed);
+        std::copy(policy, testVector.begin(), testVector.end(), libraryArr.begin());
         timer.stop();
-
-        libraryFinds += (itr != libraryArr.end());
 
         return timer.getElapsedTime();
     };
 
     auto gptLambda = [&] () {
         timer.start();
-        auto itr = parallelFindInVector(gptArr, seed);
+        parallelCopyVector(testVector, gptArr);
         timer.stop();
-        
-        gptFinds += (itr != gptArr.end());
 
         return timer.getElapsedTime();
     };
 
-    auto averageLibraryTime = runTests(libraryArr, DEFAULTREPS, stlLambda, size, seed);
+    auto averageLibraryTime = runTests(testVector, DEFAULTREPS, stlLambda, size, seed);
     printStats("Library Average: ", averageLibraryTime, "ns");
-    auto averageGPTTime = runTests(gptArr, DEFAULTREPS, gptLambda, size, seed);
+    auto averageGPTTime = runTests(testVector, DEFAULTREPS, gptLambda, size, seed);
     printStats("ChatGPT Average: ", averageGPTTime, "ns");
 
     return 0;

@@ -30,62 +30,38 @@ for your other files. Hope it helps!
  | WAS DONE BY CHATGPT!          |
  *-------------------------------*/
 
-// Median-of-three pivot selection
-int medianOfThree(std::vector<int>& arr, int low, int high) {
-    int mid = low + (high - low) / 2;
-    if (arr[mid] < arr[low])
-        std::swap(arr[low], arr[mid]);
-    if (arr[high] < arr[low])
-        std::swap(arr[low], arr[high]);
-    if (arr[mid] < arr[high])
-        std::swap(arr[mid], arr[high]);
-    return arr[high];
-}
-
-int partition(std::vector<int>& arr, int low, int high) {
-    int pivot = medianOfThree(arr, low, high);
-    int i = low - 1;
-
-    for (int j = low; j <= high - 1; j++) {
-        if (arr[j] <= pivot) {
-            i++;
-            std::swap(arr[i], arr[j]);
-        }
-    }
-    std::swap(arr[i + 1], arr[high]);
-    return i + 1;
-}
-
-void quickSort(std::vector<int>& arr, int low, int high) {
+void quickSort(std::vector<int>& vec, int low, int high) {
     if (low < high) {
-        int pi = partition(arr, low, high);
-        quickSort(arr, low, pi - 1);
-        quickSort(arr, pi + 1, high);
-    }
-}
+        // Partitioning index
+        int pivot = vec[high];  
+        int i = (low - 1);
 
-// Parallel version of the quickSort
-void quickSortParallel(std::vector<int>& arr, int low, int high, int depth = 0) {
-    if (low < high) {
-        int pi = partition(arr, low, high);
-
-        // Only create new threads if we haven't reached the maximum depth, calculated based on the number of processors
-        if (depth < omp_get_max_threads()) {
-            #pragma omp parallel sections
-            {
-                #pragma omp section
-                { quickSortParallel(arr, low, pi - 1, depth + 1); }
-
-                #pragma omp section
-                { quickSortParallel(arr, pi + 1, high, depth + 1); }
+        for (int j = low; j <= high - 1; j++) {
+            if (vec[j] < pivot) {
+                i++;
+                std::swap(vec[i], vec[j]);
             }
-        } else { // If maximum depth reached, revert to sequential quicksort
-            quickSort(arr, low, pi - 1);
-            quickSort(arr, pi + 1, high);
+        }
+        std::swap(vec[i + 1], vec[high]);
+        int pi = i + 1;
+
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            {
+                quickSort(vec, low, pi - 1);
+            }
+            #pragma omp section
+            {
+                quickSort(vec, pi + 1, high);
+            }
         }
     }
 }
 
+void sortVector(std::vector<int>& vec) {
+    quickSort(vec, 0, vec.size() - 1);
+}
 /*-------------------------------*
  |         END SECTION           |
  *-------------------------------*/
@@ -97,15 +73,17 @@ int main(int argc, char** argv)
     int seed = find_int_arg(argc, argv, "-s", DEFAULTSEED);
     auto policy = std::execution::par;
 
-    std::vector<int> systemArr;
-    std::vector<int> gptArr;
+    Timer timer;
+
+    std::vector<int> libraryArr(size);
+    std::vector<int> gptArr(size);
 
 #ifdef DEBUG
     std::set<std::thread::id> thread_ids;
     std::mutex mutex;
 
     auto stlLambda = [&] () {
-        std::sort(policy, systemArr.begin(), systemArr.end(), [&](int i, int j){
+        std::sort(policy, libraryArr.begin(), libraryArr.end(), [&](int i, int j){
             const std::lock_guard<std::mutex> lock(mutex);
             thread_ids.insert(std::this_thread::get_id());
 
@@ -114,16 +92,23 @@ int main(int argc, char** argv)
     };
 #else
     auto stlLambda = [&] () {
-        std::sort(policy, systemArr.begin(), systemArr.end());
+        timer.start();
+        std::sort(policy, libraryArr.begin(), libraryArr.end());
+        timer.stop();
+
+        return timer.getElapsedTime();
     };
 #endif
 
     auto gptLambda = [&] () {
-        quickSortParallel(gptArr, 0, gptArr.size() - 1);
+        timer.start();
+        sortVector(gptArr);
+        timer.stop();
+
+        return timer.getElapsedTime();
     };
 
-    std::cout << std::fixed << std::setprecision(3);
-    auto averageLibraryTime = runTests(systemArr, DEFAULTREPS, stlLambda, size, seed);
+    auto averageLibraryTime = runTests(libraryArr, DEFAULTREPS, stlLambda, size, seed);
     printStats("Library Average: ", averageLibraryTime, "ns");
     auto averageGPTTime = runTests(gptArr, DEFAULTREPS, gptLambda, size, seed);
     printStats("ChatGPT Average: ", averageGPTTime, "ns");
