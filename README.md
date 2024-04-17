@@ -14,7 +14,7 @@ Use the scripts in `slurm/` to run your code on ICE-PACE.
 
 `sbatch slurm/job-gen`
 
-## Running CUDA ##
+## Running CUDA (OUT OF DATE) ##
 `git clone https://github.com/sjankowskim/cse6230-project.git`
 
 Change your directory to `cse6230-project`
