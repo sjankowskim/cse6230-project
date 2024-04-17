@@ -19,7 +19,7 @@ CPMAddPackage(
     GIT_TAG main # Fetches the latest commit on the main branch
 )
 
-add_executable(gpu cuda/cuda_foreach/cuda_foreach.cu ../utils.hpp)
+add_executable(gpu cuda/cuda_sum/cuda_sum.cu ../utils.hpp)
 target_compile_features(gpu PRIVATE cxx_std_14)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70")
 set_target_properties(gpu PROPERTIES CUDA_ARCHITECTURES "70")
